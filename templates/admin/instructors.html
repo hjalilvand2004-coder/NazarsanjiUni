@@ -1,0 +1,407 @@
+{% extends "admin/base.html" %}
+{% block title %}اساتید{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>👨‍🏫 اساتید</h1>
+        <div class="breadcrumb">خانه / اطلاعات پایه / اساتید</div>
+    </div>
+    <div class="actions">
+        <button onclick="openAddInstructorModal()" class="btn btn-primary btn-sm">
+            ➕ افزودن استاد
+        </button>
+        <button onclick="openSyncModal()" class="btn btn-ghost btn-sm">
+            🔄 همگام‌سازی
+        </button>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📤 بارگذاری اکسل
+            <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="uploadInstructorsExcel(this)">
+        </label>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+{% endwith %}
+
+<!-- آمار -->
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div class="stat-label">کل اساتید</div>
+        <div class="stat-value">{{ instructors|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+        <div class="stat-label">اساتید فعال</div>
+        <div class="stat-value" style="color:var(--success);">{{ instructors|selectattr('is_active')|list|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg></div>
+        <div class="stat-label">هیئت علمی</div>
+        <div class="stat-value">{{ instructors|selectattr('cooperation_type', 'equalto', 'هیئت علمی')|list|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div class="stat-label">آخرین sync</div>
+        <div class="stat-value" style="font-size:14px;">{{ sync_settings.last_sync_at or '—' }}</div>
+    </div>
+</div>
+
+<!-- فیلتر -->
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+    <input type="text" id="search-input" class="form-input" placeholder="🔍 جستجو..." value="{{ search }}" oninput="filterTable()" style="max-width:300px;">
+    <select id="coop-filter" class="form-select" style="width:auto;" onchange="filterTable()">
+        <option value="">همه انواع همکاری</option>
+        <option value="هیئت علمی" {% if cooperation_type == 'هیئت علمی' %}selected{% endif %}>هیئت علمی</option>
+        <option value="تمام‌وقت" {% if cooperation_type == 'تمام‌وقت' %}selected{% endif %}>تمام‌وقت</option>
+        <option value="نیم‌وقت" {% if cooperation_type == 'نیم‌وقت' %}selected{% endif %}>نیم‌وقت</option>
+        <option value="ساعتی" {% if cooperation_type == 'ساعتی' %}selected{% endif %}>ساعتی</option>
+        <option value="مهمان" {% if cooperation_type == 'مهمان' %}selected{% endif %}>مهمان</option>
+    </select>
+    <span style="font-size:12px;color:var(--text-3);">تعداد نتایج: <strong id="result-count">{{ instructors|length }}</strong></span>
+</div>
+
+<!-- جدول -->
+<div class="card">
+    <table class="table" id="instructors-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>کد</th>
+                <th>نام و نام خانوادگی</th>
+                <th>نام کاربری</th>
+                <th>تلفن</th>
+                <th>گروه</th>
+                <th>نوع همکاری</th>
+                <th>حداکثر واحد</th>
+                <th>وضعیت</th>
+                <th>منبع</th>
+                <th>عملیات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in instructors %}
+            <tr data-search="{{ item.full_name }} {{ item.username }} {{ item.phone }} {{ item.code }}" data-coop="{{ item.cooperation_type or '' }}">
+                <td>{{ loop.index }}</td>
+                <td><code>{{ item.code or '—' }}</code></td>
+                <td>{{ item.full_name or '—' }}</td>
+                <td><code>{{ item.username or '—' }}</code></td>
+                <td><code dir="ltr">{{ item.phone or '—' }}</code></td>
+                <td>{{ item.group or '—' }}</td>
+                <td>
+                    {% if item.cooperation_type == 'هیئت علمی' %}<span class="badge badge-success">{{ item.cooperation_type }}</span>
+                    {% elif item.cooperation_type %}{{ item.cooperation_type }}
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ item.max_teaching_units or 0 }}</td>
+                <td>
+                    {% if item.is_active %}<span class="badge badge-success">فعال</span>
+                    {% else %}<span class="badge badge-danger">غیرفعال</span>{% endif %}
+                </td>
+                <td>
+                    {% if item.source == 'remote' %}<span class="badge badge-info">سامانه برنامه‌ریزی</span>
+                    {% else %}<span class="badge" style="background:#f1f5f9;color:#475569;">محلی</span>{% endif %}
+                </td>
+                <td>
+                    <button onclick="editInstructor({{ item.id }})" class="btn btn-ghost btn-sm">✏️</button>
+                    <button onclick="deleteInstructor({{ item.id }})" class="btn btn-ghost btn-sm" style="color:var(--danger);">🗑️</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-3);">
+                هیچ استادی ثبت نشده است. برای شروع، می‌توانید از دکمه «افزودن استاد» یا «بارگذاری اکسل» یا «همگام‌سازی» استفاده کنید.
+            </td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- مودال افزودن/ویرایش استاد -->
+<div id="instructor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:28px 32px;max-width:680px;width:95%;max-height:92vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--glass-border);padding-bottom:12px;">
+            <h3 id="modal-title" style="font-size:18px;color:var(--text-1);">➕ افزودن استاد</h3>
+            <button onclick="closeInstructorModal()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;">✕</button>
+        </div>
+        <form id="instructor-form" onsubmit="submitInstructor(event)">
+            <input type="hidden" id="inst-id" name="id">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                    <label class="form-label">نام *</label>
+                    <input type="text" id="i-first_name" name="first_name" class="form-input" placeholder="نام" required>
+                </div>
+                <div>
+                    <label class="form-label">نام خانوادگی *</label>
+                    <input type="text" id="i-last_name" name="last_name" class="form-input" placeholder="نام خانوادگی" required>
+                </div>
+                <div>
+                    <label class="form-label">کد استاد</label>
+                    <input type="text" id="i-code" name="code" class="form-input" placeholder="مثلاً INST001" dir="ltr" style="text-align:right;">
+                </div>
+                <div>
+                    <label class="form-label">نام کاربری</label>
+                    <input type="text" id="i-username" name="username" class="form-input" placeholder="نام کاربری برای ورود" dir="ltr" style="text-align:right;">
+                </div>
+                <div>
+                    <label class="form-label">تلفن همراه</label>
+                    <input type="tel" id="i-phone" name="phone" class="form-input" placeholder="09123456789" dir="ltr" style="text-align:right;" maxlength="11">
+                </div>
+                <div>
+                    <label class="form-label">ایمیل</label>
+                    <input type="email" id="i-email" name="email" class="form-input" placeholder="email@example.com" dir="ltr" style="text-align:right;">
+                </div>
+                <div>
+                    <label class="form-label">گروه تخصصی</label>
+                    <input type="text" id="i-group" name="group" class="form-input" placeholder="مثلاً مهندسی کامپیوتر">
+                </div>
+                <div>
+                    <label class="form-label">نوع همکاری</label>
+                    <select id="i-cooperation_type" name="cooperation_type" class="form-select">
+                        <option value="">انتخاب کنید...</option>
+                        <option value="هیئت علمی">هیئت علمی</option>
+                        <option value="تمام‌وقت">تمام‌وقت</option>
+                        <option value="نیم‌وقت">نیم‌وقت</option>
+                        <option value="ساعتی">ساعتی</option>
+                        <option value="مهمان">مهمان</option>
+                        <option value="قراردادی">قراردادی</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">حداکثر واحد تدریس</label>
+                    <input type="number" id="i-max_teaching_units" name="max_teaching_units" class="form-input" placeholder="12" min="0" dir="ltr">
+                </div>
+                <div>
+                    <label class="form-label">نقش</label>
+                    <select id="i-role" name="role" class="form-select">
+                        <option value="instructor">استاد</option>
+                        <option value="group_admin">مدیرگروه</option>
+                        <option value="admin">ادمین</option>
+                    </select>
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label class="form-label">رمز عبور {% if not is_edit %}*{% else %}(در صورت تغییر){% endif %}</label>
+                    <input type="password" id="i-password" name="password" class="form-input" placeholder="حداقل ۶ کاراکتر" {% if not is_edit %}required{% endif %}>
+                </div>
+                <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="i-is_active" name="is_active" value="1" checked style="width:18px;height:18px;accent-color:var(--accent);">
+                    <label for="i-is_active" style="font-size:14px;cursor:pointer;">حساب فعال باشد</label>
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button type="submit" class="btn btn-primary" style="flex:1;">💾 ذخیره</button>
+                <button type="button" onclick="closeInstructorModal()" class="btn btn-ghost">❌ انصراف</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- مودال همگام‌سازی -->
+<div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:28px 32px;max-width:560px;width:95%;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--glass-border);padding-bottom:12px;">
+            <h3 style="font-size:18px;color:var(--text-1);">🔄 همگام‌سازی با سامانه برنامه‌ریزی</h3>
+            <button onclick="closeSyncModal()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;">✕</button>
+        </div>
+        <form id="sync-form" onsubmit="saveSyncSettings(event)">
+            <div style="display:grid;gap:14px;">
+                <div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--glass-strong);border-radius:10px;border:1px solid var(--glass-border);">
+                    <input type="checkbox" id="sync-enabled" name="enabled" value="1" {% if sync_settings.enabled %}checked{% endif %} style="width:20px;height:20px;accent-color:var(--accent);">
+                    <label for="sync-enabled" style="font-size:14px;cursor:pointer;">فعال‌سازی همگام‌سازی</label>
+                </div>
+                <div>
+                    <label class="form-label">آدرس سرویس برنامه‌ریزی</label>
+                    <input type="text" id="sync-service_url" name="service_url" class="form-input" value="{{ sync_settings.service_url }}" placeholder="http://188.212.96.235:8083" dir="ltr" style="text-align:right;font-family:monospace;">
+                </div>
+                <div>
+                    <label class="form-label">نام کاربری سرویس</label>
+                    <input type="text" id="sync-username" name="username" class="form-input" value="{{ sync_settings.username }}" placeholder="نام کاربری سامانه برنامه‌ریزی" dir="ltr" style="text-align:right;">
+                </div>
+                <div>
+                    <label class="form-label">رمز عبور سرویس</label>
+                    <input type="password" id="sync-password" name="password" class="form-input" placeholder="{{ '••••••••' if sync_settings.password else 'رمز عبور سرویس' }}">
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--glass-strong);border-radius:10px;border:1px solid var(--glass-border);">
+                    <input type="checkbox" id="sync-auto_sync" name="auto_sync" value="1" {% if sync_settings.auto_sync %}checked{% endif %} style="width:20px;height:20px;accent-color:var(--accent);">
+                    <label for="sync-auto_sync" style="font-size:14px;cursor:pointer;">همگام‌سازی خودکار (هر ساعت)</label>
+                </div>
+                {% if sync_settings.last_sync_at %}
+                <div style="padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:12px;color:var(--text-2);">
+                    <strong>آخرین همگام‌سازی:</strong> {{ sync_settings.last_sync_at }}<br>
+                    <strong>تعداد همگام‌شده:</strong> {{ sync_settings.last_sync_count }} استاد
+                </div>
+                {% endif %}
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button type="button" onclick="runSyncNow()" class="btn btn-primary" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);">
+                    🔄 همگام‌سازی الان
+                </button>
+                <button type="submit" class="btn btn-primary">💾 ذخیره تنظیمات</button>
+                <button type="button" onclick="closeSyncModal()" class="btn btn-ghost">❌ انصراف</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// ===== فیلتر جدول =====
+function filterTable() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const coop = document.getElementById('coop-filter').value;
+    let count = 0;
+    document.querySelectorAll('#instructors-table tbody tr').forEach(tr => {
+        const text = (tr.dataset.search || '').toLowerCase();
+        const trCoop = tr.dataset.coop || '';
+        const matchSearch = !q || text.includes(q);
+        const matchCoop = !coop || trCoop === coop;
+        const show = matchSearch && matchCoop;
+        tr.style.display = show ? '' : 'none';
+        if (show) count++;
+    });
+    document.getElementById('result-count').textContent = count;
+}
+
+// ===== مودال استاد =====
+function openAddInstructorModal() {
+    document.getElementById('instructor-form').reset();
+    document.getElementById('inst-id').value = '';
+    document.getElementById('modal-title').textContent = '➕ افزودن استاد';
+    document.getElementById('i-password').required = true;
+    document.getElementById('instructor-modal').style.display = 'flex';
+}
+
+function closeInstructorModal() {
+    document.getElementById('instructor-modal').style.display = 'none';
+}
+
+function editInstructor(id) {
+    fetch('/api/instructors').then(r => r.json()).then(data => {
+        const item = data.items.find(i => i.id === id);
+        if (!item) return alert('استاد یافت نشد');
+        document.getElementById('inst-id').value = item.id;
+        document.getElementById('i-code').value = item.code || '';
+        document.getElementById('i-username').value = item.username || '';
+        document.getElementById('i-first_name').value = item.first_name || '';
+        document.getElementById('i-last_name').value = item.last_name || '';
+        document.getElementById('i-phone').value = item.phone || '';
+        document.getElementById('i-email').value = item.email || '';
+        document.getElementById('i-group').value = item.group || '';
+        document.getElementById('i-cooperation_type').value = item.cooperation_type || '';
+        document.getElementById('i-max_teaching_units').value = item.max_teaching_units || 0;
+        document.getElementById('i-role').value = item.role || 'instructor';
+        document.getElementById('i-is_active').checked = item.is_active == 1;
+        document.getElementById('i-password').value = '';
+        document.getElementById('i-password').required = false;
+        document.getElementById('modal-title').textContent = '✏️ ویرایش استاد';
+        document.getElementById('instructor-modal').style.display = 'flex';
+    });
+}
+
+async function submitInstructor(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = {};
+    new FormData(form).forEach((v, k) => data[k] = v);
+    const id = data.id;
+    delete data.id;
+    if (data.max_teaching_units) data.max_teaching_units = parseInt(data.max_teaching_units);
+    data.is_active = data.is_active === '1' || data.is_active === true;
+    if (!data.password) delete data.password;
+    const url = id ? `/api/instructors/${id}` : '/api/instructors';
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, {
+        method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    const res = await r.json();
+    if (res.ok) {
+        alert(id ? 'استاد ویرایش شد' : 'استاد افزوده شد');
+        location.reload();
+    } else {
+        alert('خطا: ' + (res.error || 'نامشخص'));
+    }
+}
+
+async function deleteInstructor(id) {
+    if (!confirm('آیا از حذف این استاد مطمئن هستید؟')) return;
+    const r = await fetch(`/api/instructors/${id}`, {method: 'DELETE'});
+    const res = await r.json();
+    if (res.ok) location.reload();
+    else alert('خطا: ' + (res.error || 'نامشخص'));
+}
+
+// ===== آپلود اکسل =====
+async function uploadInstructorsExcel(input) {
+    if (!input.files[0]) return;
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    const r = await fetch('/api/instructors/upload', {method: 'POST', body: fd});
+    const res = await r.json();
+    if (res.ok || res.count > 0) {
+        alert(res.message + (res.errors && res.errors.length ? '\nخطاها:\n' + res.errors.slice(0,5).join('\n') : ''));
+        location.reload();
+    } else {
+        alert('خطا:\n' + (res.message || res.error || '') + (res.errors ? '\n' + res.errors.join('\n') : ''));
+    }
+    input.value = '';
+}
+
+// ===== مودال همگام‌سازی =====
+function openSyncModal() {
+    document.getElementById('sync-modal').style.display = 'flex';
+}
+function closeSyncModal() {
+    document.getElementById('sync-modal').style.display = 'none';
+}
+
+async function saveSyncSettings(e) {
+    e.preventDefault();
+    const data = {
+        enabled: document.getElementById('sync-enabled').checked,
+        service_url: document.getElementById('sync-service_url').value,
+        username: document.getElementById('sync-username').value,
+        password: document.getElementById('sync-password').value,
+        auto_sync: document.getElementById('sync-auto_sync').checked,
+    };
+    const r = await fetch('/api/instructors/sync/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    const res = await r.json();
+    if (res.ok) {
+        alert('تنظیمات ذخیره شد');
+        closeSyncModal();
+    } else {
+        alert('خطا در ذخیره');
+    }
+}
+
+async function runSyncNow() {
+    if (!confirm('همگام‌سازی انجام شود؟ این عملیات ممکن است چند ثانیه طول بکشد.')) return;
+    const btn = event.target;
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'در حال همگام‌سازی...';
+    try {
+        const r = await fetch('/api/instructors/sync', {method: 'POST'});
+        const res = await r.json();
+        if (res.ok) {
+            alert(res.message);
+            location.reload();
+        } else {
+            alert('خطا: ' + (res.message || res.error || 'نامشخص'));
+        }
+    } catch (e) {
+        alert('خطا در ارتباط: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+    }
+}
+</script>
+{% endblock %}

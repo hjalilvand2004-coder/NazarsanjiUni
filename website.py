@@ -67,7 +67,6 @@ try:
     import preferences as prefs_module
     import slot_times as slot_times_module
     PREFERENCES_AVAILABLE = True
-    # اطمینان از وجود جداول (additive، بدون آسیب به داده‌های موجود)
     try:
         prefs_module.ensure_preferences_tables(db)
     except Exception as _prefs_init_err:
@@ -75,6 +74,18 @@ try:
 except Exception as _prefs_err:
     PREFERENCES_AVAILABLE = False
     print(f"⚠️ preferences module not available: {_prefs_err}")
+
+# ===== [v3.10.0] ماژول اساتید =====
+try:
+    import instructors as instructors_module
+    INSTRUCTORS_AVAILABLE = True
+    try:
+        instructors_module.ensure_instructors_table(db)
+    except Exception as _inst_init_err:
+        print(f"⚠️ instructors table init error: {_inst_init_err}")
+except Exception as _inst_err:
+    INSTRUCTORS_AVAILABLE = False
+    print(f"⚠️ instructors module not available: {_inst_err}")
 # ===========================================
 
 import sys
@@ -1319,6 +1330,164 @@ def admin_preferences():
         unique_courses=[dict(r) if not isinstance(r, dict) else r for r in unique_courses],
         terms=terms,
         admin=g.admin,
+    )
+
+
+# ==================================================
+# ===== [v3.10.0] مسیرهای اساتید =====
+# ==================================================
+
+@app.route("/api/courses/unique")
+@login_required
+def api_courses_unique_list():
+    """لیست دروس یکتا — برای استفاده در Course Picker."""
+    rows = db.execute_query("SELECT unique_code AS id, unique_code, title, course_group FROM unique_courses WHERE is_active = 1 ORDER BY title")
+    items = [dict(r) if not isinstance(r, dict) else r for r in rows] if rows else []
+    return jsonify({"ok": True, "items": items, "count": len(items)})
+
+
+@app.route("/api/instructors")
+@login_required
+def api_instructors_list():
+    """لیست اساتید."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    search = request.args.get("search", "")
+    cooperation_type = request.args.get("cooperation_type", "")
+    items = instructors_module.get_all_instructors(db, search=search, cooperation_type=cooperation_type)
+    return jsonify({"ok": True, "items": items, "count": len(items)})
+
+
+@app.route("/api/instructors", methods=["POST"])
+@login_required
+def api_instructors_create():
+    """ساخت استاد جدید."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    if not data.get("full_name") and not (data.get("first_name") or data.get("last_name")):
+        return jsonify({"ok": False, "error": "نام الزامی است"}), 400
+    inst_id, err = instructors_module.create_instructor(db, data)
+    if err:
+        return jsonify({"ok": False, "error": err}), 500
+    audit_log("instructor_create", description=f"ساخت استاد #{inst_id}")
+    return jsonify({"ok": True, "id": inst_id})
+
+
+@app.route("/api/instructors/<int:inst_id>", methods=["PUT"])
+@login_required
+def api_instructors_update(inst_id):
+    """ویرایش استاد."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    ok, err = instructors_module.update_instructor(db, inst_id, data)
+    if err:
+        if "پیدا نشد" in err:
+            return jsonify({"ok": False, "error": "استاد پیدا نشد"}), 404
+        return jsonify({"ok": False, "error": err}), 500
+    audit_log("instructor_update", description=f"ویرایش استاد #{inst_id}")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/instructors/<int:inst_id>", methods=["DELETE"])
+@login_required
+def api_instructors_delete(inst_id):
+    """حذف استاد."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    ok, err = instructors_module.delete_instructor(db, inst_id)
+    if err:
+        if "پیدا نشد" in err:
+            return jsonify({"ok": False, "error": "استاد پیدا نشد"}), 404
+        return jsonify({"ok": False, "error": err}), 500
+    audit_log("instructor_delete", description=f"حذف استاد #{inst_id}")
+    return jsonify({"ok": True, "message": "استاد با موفقیت حذف شد"})
+
+
+@app.route("/api/instructors/upload", methods=["POST"])
+@login_required
+def api_instructors_upload():
+    """آپلود اکسل اساتید."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "فایل ارسال نشده"}), 400
+    f = request.files["file"]
+    if not f.filename or not f.filename.lower().endswith((".xlsx", ".xls")):
+        return jsonify({"ok": False, "error": "فرمت فایل باید اکسل باشد"}), 400
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        f.save(tmp.name)
+        result = instructors_module.import_instructors_excel(db, tmp.name)
+        os.unlink(tmp.name)
+    audit_log("instructor_upload", description=f"آپلود اکسل اساتید: {result.get('count', 0)} رکورد")
+    return jsonify(result)
+
+
+@app.route("/api/instructors/sync", methods=["POST"])
+@login_required
+def api_instructors_sync():
+    """همگام‌سازی اساتید از سامانه برنامه‌ریزی (پورت 8083)."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    settings = instructors_module.load_sync_settings()
+    result = instructors_module.sync_instructors_from_remote(db, settings)
+    if result.get("ok"):
+        audit_log("instructor_sync", description=result.get("message", ""))
+    return jsonify(result)
+
+
+@app.route("/api/instructors/sync/settings")
+@login_required
+def api_instructors_sync_settings():
+    """گرفتن تنظیمات همگام‌سازی."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    settings = instructors_module.load_sync_settings()
+    # پاک کردن password برای نمایش
+    safe_settings = dict(settings)
+    if safe_settings.get("password"):
+        safe_settings["password"] = "********"
+    return jsonify({"ok": True, "settings": safe_settings})
+
+
+@app.route("/api/instructors/sync/settings", methods=["POST"])
+@login_required
+def api_instructors_sync_settings_save():
+    """ذخیره تنظیمات همگام‌سازی."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    settings = instructors_module.load_sync_settings()
+    for k in ("enabled", "service_url", "username", "auto_sync", "sync_interval_minutes"):
+        if k in data:
+            settings[k] = data[k]
+    # اگر password ارسال شد و "********" نبود، به‌روزرسانی کن
+    if data.get("password") and data["password"] != "********":
+        settings["password"] = data["password"]
+    ok = instructors_module.save_sync_settings(settings)
+    audit_log("instructor_sync_settings_update", description="به‌روزرسانی تنظیمات sync")
+    return jsonify({"ok": ok})
+
+
+@app.route("/admin/instructors")
+@login_required
+def admin_instructors():
+    """صفحه مدیریت اساتید — ادمین کامل، استاد/مدیرگروه فقط می‌بیند."""
+    if not INSTRUCTORS_AVAILABLE:
+        return render_template("admin/instructors_unavailable.html", admin=g.admin)
+    search = request.args.get("search", "")
+    cooperation_type = request.args.get("cooperation_type", "")
+    items = instructors_module.get_all_instructors(db, search=search, cooperation_type=cooperation_type)
+    sync_settings = instructors_module.load_sync_settings()
+    return render_template(
+        "admin/instructors.html",
+        instructors=items,
+        sync_settings=sync_settings,
+        admin=g.admin,
+        search=search,
+        cooperation_type=cooperation_type,
     )
 
 

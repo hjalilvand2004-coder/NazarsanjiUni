@@ -5,15 +5,28 @@
 <div class="admin-header">
     <div>
         <h1>📋 مطلوبیت‌های اساتید</h1>
-        <div class="breadcrumb">خانه / مدیریت / مطلوبیت‌های اساتید</div>
+        <div class="breadcrumb">
+            خانه / مدیریت / مطلوبیت‌های اساتید
+            {% if is_instructor %}
+            • <span style="color:#10b981;">نمایش فقط مطلوبیت‌های شما</span>
+            {% endif %}
+        </div>
     </div>
     <div class="actions">
-        <button onclick="openAddTeachingModal()" class="btn btn-primary btn-sm">
-            ➕ افزودن مطلوبیت تدریس
+        <button onclick="openCoursePicker()" class="btn btn-primary btn-sm">
+            📚 انتخاب درس‌های مطلوب
         </button>
-        <button onclick="openAddTimeModal()" class="btn btn-primary btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
-            ➕ افزودن مطلوبیت زمان
+        <button onclick="openTimePicker()" class="btn btn-primary btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+            📅 انتخاب زمان‌های مطلوب
         </button>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📤 آپلود اکسل تدریس
+            <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="uploadTeachingExcel(this)">
+        </label>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📤 آپلود اکسل زمان
+            <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="uploadTimeExcel(this)">
+        </label>
     </div>
 </div>
 
@@ -36,7 +49,7 @@
         <div class="stat-value">{{ time_items|length }}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></div>
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
         <div class="stat-label">دروس یکتا</div>
         <div class="stat-value">{{ unique_courses|length }}</div>
     </div>
@@ -44,23 +57,15 @@
 
 <!-- تب‌ها -->
 <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--glass-border);">
-    <button class="tab-btn active" data-tab="teaching" onclick="switchTab('teaching')" style="padding:10px 18px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);">📋 مطلوبیت‌های تدریس</button>
+    <button class="tab-btn active" data-tab="teaching" onclick="switchTab('teaching')" style="padding:10px 18px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);">📚 مطلوبیت‌های تدریس</button>
     <button class="tab-btn" data-tab="time" onclick="switchTab('time')" style="padding:10px 18px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text-3);border-bottom:2px solid transparent;">⏰ مطلوبیت‌های زمان</button>
 </div>
 
 <!-- محتوای تب تدریس -->
-<div id="tab-teaching" class="tab-content">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap;">
-        <input type="text" id="teaching-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;" oninput="filterTeaching()">
-        <div style="display:flex;gap:8px;">
-            <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
-                📤 بارگذاری اکسل
-                <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="uploadTeachingExcel(this)">
-            </label>
-        </div>
-    </div>
+<div id="tab-teaching">
+    <input type="text" id="teaching-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;margin-bottom:12px;" oninput="filterTeaching()">
     <div class="card">
-        <table class="table" id="teaching-table">
+        <table class="table">
             <thead>
                 <tr>
                     <th>#</th>
@@ -84,13 +89,9 @@
                     <td>{{ item.expert_group or '—' }}</td>
                     <td>{{ item.cooperation_type or '—' }}</td>
                     <td>
-                        {% if item.status == 'approved' %}
-                        <span class="badge badge-success">تأیید شده</span>
-                        {% elif item.status == 'rejected' %}
-                        <span class="badge badge-danger">رد شده</span>
-                        {% else %}
-                        <span class="badge badge-warning">در انتظار</span>
-                        {% endif %}
+                        {% if item.status == 'approved' %}<span class="badge badge-success">تأیید شده</span>
+                        {% elif item.status == 'rejected' %}<span class="badge badge-danger">رد شده</span>
+                        {% else %}<span class="badge badge-warning">در انتظار</span>{% endif %}
                     </td>
                     <td><code>{{ item.term_code or '—' }}</code></td>
                     <td>
@@ -99,7 +100,9 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">هیچ داده‌ای موجود نیست</td></tr>
+                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">
+                    هیچ مطلوبیت تدریسی ثبت نشده است. با دکمه «📚 انتخاب درس‌های مطلوب» شروع کنید.
+                </td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -107,29 +110,15 @@
 </div>
 
 <!-- محتوای تب زمان -->
-<div id="tab-time" class="tab-content" style="display:none;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap;">
-        <input type="text" id="time-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;" oninput="filterTime()">
-        <div style="display:flex;gap:8px;align-items:center;">
-            <select id="time-upload-term" class="form-select" style="width:auto;">
-                {% for t in terms %}
-                <option value="{{ t.key }}">{{ t.title }}</option>
-                {% endfor %}
-            </select>
-            <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
-                📤 بارگذاری اکسل
-                <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="uploadTimeExcel(this)">
-            </label>
-        </div>
-    </div>
+<div id="tab-time" style="display:none;">
+    <input type="text" id="time-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;margin-bottom:12px;" oninput="filterTime()">
     <div class="card">
-        <table class="table" id="time-table">
+        <table class="table">
             <thead>
                 <tr>
                     <th>#</th>
                     <th>روز</th>
                     <th>نام استاد</th>
-                    <th>کد استاد</th>
                     <th>شروع</th>
                     <th>پایان</th>
                     <th>گروه زمانی</th>
@@ -144,7 +133,6 @@
                     <td>{{ loop.index }}</td>
                     <td>{{ item.day or '—' }}</td>
                     <td>{{ item.instructor_name or '—' }}</td>
-                    <td><code>{{ item.instructor_code or '—' }}</code></td>
                     <td><code dir="ltr">{{ item.start_time or '—' }}</code></td>
                     <td><code dir="ltr">{{ item.end_time or '—' }}</code></td>
                     <td>
@@ -164,161 +152,297 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-3);">هیچ داده‌ای موجود نیست</td></tr>
+                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">
+                    هیچ مطلوبیت زمانی ثبت نشده است. با دکمه «📅 انتخاب زمان‌های مطلوب» شروع کنید.
+                </td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
 
-<!-- مودال افزودن مطلوبیت تدریس -->
-<div id="teaching-modal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:28px 32px;max-width:600px;width:90%;max-height:92vh;overflow-y:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--glass-border);padding-bottom:12px;">
-            <h3 style="font-size:18px;color:var(--text-1);">➕ افزودن مطلوبیت تدریس</h3>
-            <button onclick="closeTeachingModal()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;">✕</button>
+<!-- ====== Course Picker Modal (گرافیکی) ====== -->
+<div id="course-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:0;max-width:900px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--glass-border);background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.05));">
+            <div>
+                <h3 style="font-size:18px;color:var(--text-1);">📚 انتخاب درس‌های مطلوب</h3>
+                <p style="font-size:12px;color:var(--text-3);margin-top:4px;">درس‌هایی که تمایل به تدریس آن‌ها دارید را انتخاب کنید</p>
+            </div>
+            <button onclick="closeCoursePicker()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:24px;">✕</button>
         </div>
-        <form id="teaching-form" onsubmit="submitTeaching(event)">
-            <input type="hidden" id="teaching-id" name="id">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                <div style="grid-column:1/-1;">
-                    <label class="form-label">کد استاد</label>
-                    <input type="text" id="t-instructor_code" name="instructor_code" class="form-input" placeholder="کد استاد" dir="ltr" style="text-align:right;">
-                </div>
-                <div style="grid-column:1/-1;">
-                    <label class="form-label">نام استاد *</label>
-                    <input type="text" id="t-instructor_name" name="instructor_name" class="form-input" placeholder="نام استاد" required>
-                </div>
-                <div>
-                    <label class="form-label">نام درس *</label>
-                    <input type="text" id="t-course_name" name="course_name" class="form-input" placeholder="نام درس" required>
-                </div>
-                <div>
-                    <label class="form-label">کد یکتا درس</label>
-                    <input type="text" id="t-unique_course_code" name="unique_course_code" class="form-input" placeholder="کد درس" dir="ltr" style="text-align:right;">
-                </div>
-                <div>
-                    <label class="form-label">گروه تخصصی</label>
-                    <input type="text" id="t-expert_group" name="expert_group" class="form-input" placeholder="گروه">
-                </div>
-                <div>
-                    <label class="form-label">نوع همکاری</label>
-                    <select id="t-cooperation_type" name="cooperation_type" class="form-select">
-                        <option value="">انتخاب کنید...</option>
-                        <option value="هیئت علمی">هیئت علمی</option>
-                        <option value="تمام‌وقت">تمام‌وقت</option>
-                        <option value="نیم‌وقت">نیم‌وقت</option>
-                        <option value="ساعتی">ساعتی</option>
-                        <option value="مهمان">مهمان</option>
-                        <option value="قراردادی">قراردادی</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">وضعیت</label>
-                    <select id="t-status" name="status" class="form-select">
-                        <option value="pending">در انتظار</option>
-                        <option value="approved">تأیید شده</option>
-                        <option value="rejected">رد شده</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">کد ترم</label>
-                    <input type="text" id="t-term_code" name="term_code" class="form-input" placeholder="مثلاً 14031" dir="ltr" style="text-align:right;">
-                </div>
+        <div style="padding:20px 28px;overflow-y:auto;flex:1;">
+            <input type="text" id="course-search-input" class="form-input" placeholder="🔍 جستجوی درس..." style="width:100%;margin-bottom:14px;" oninput="filterCourseList()">
+            <div id="course-list-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;">
+                <!-- پر می‌شود -->
             </div>
-            <div style="display:flex;gap:10px;margin-top:20px;">
-                <button type="submit" class="btn btn-primary" style="flex:1;">💾 ذخیره</button>
-                <button type="button" onclick="closeTeachingModal()" class="btn btn-ghost">❌ انصراف</button>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;border-top:1px solid var(--glass-border);background:#f8fafc;">
+            <div style="font-size:13px;color:var(--text-2);">
+                <span id="selected-courses-count">۰</span> درس انتخاب‌شده
             </div>
-        </form>
+            <div style="display:flex;gap:10px;">
+                <button onclick="closeCoursePicker()" class="btn btn-ghost">❌ انصراف</button>
+                <button onclick="submitCoursePicker()" class="btn btn-primary">💾 ذخیره انتخاب‌ها</button>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- مودال افزودن مطلوبیت زمان -->
-<div id="time-modal" class="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:28px 32px;max-width:800px;width:95%;max-height:92vh;overflow-y:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--glass-border);padding-bottom:12px;">
-            <h3 style="font-size:18px;color:var(--text-1);">➕ افزودن مطلوبیت زمان‌بندی</h3>
-            <button onclick="closeTimeModal()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;">✕</button>
+<!-- ====== Time Slot Picker Modal (گرافیکی) ====== -->
+<div id="time-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:0;max-width:1000px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--glass-border);background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.05));">
+            <div>
+                <h3 style="font-size:18px;color:var(--text-1);">📅 انتخاب زمان‌های مطلوب</h3>
+                <p style="font-size:12px;color:var(--text-3);margin-top:4px;">روز و بازه زمانی مورد نظر خود را بصری انتخاب کنید</p>
+            </div>
+            <button onclick="closeTimePicker()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:24px;">✕</button>
         </div>
-        <form id="time-form" onsubmit="submitTime(event)">
-            <input type="hidden" id="time-id" name="id">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+        <div style="padding:20px 28px;overflow-y:auto;flex:1;">
+            <!-- انتخاب ترم و واحد -->
+            <div style="display:flex;gap:14px;margin-bottom:18px;align-items:center;flex-wrap:wrap;">
                 <div>
-                    <label class="form-label">کد استاد</label>
-                    <input type="text" id="tp-instructor_code" name="instructor_code" class="form-input" placeholder="کد استاد" dir="ltr" style="text-align:right;">
-                </div>
-                <div>
-                    <label class="form-label">نام استاد *</label>
-                    <input type="text" id="tp-instructor_name" name="instructor_name" class="form-input" placeholder="نام استاد" required>
-                </div>
-                <div>
-                    <label class="form-label">روز *</label>
-                    <select id="tp-day" name="day" class="form-select" required>
-                        <option value="">انتخاب کنید...</option>
-                        <option value="شنبه">شنبه</option>
-                        <option value="یکشنبه">یکشنبه</option>
-                        <option value="دوشنبه">دوشنبه</option>
-                        <option value="سه‌شنبه">سه‌شنبه</option>
-                        <option value="چهارشنبه">چهارشنبه</option>
-                        <option value="پنجشنبه">پنجشنبه</option>
+                    <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">ترم</label>
+                    <select id="tp-term" class="form-select" style="width:auto;" onchange="loadSlots()">
+                        <option value="mehr">نیمسال اول (مهر)</option>
+                        <option value="bahman">نیمسال دوم (بهمن)</option>
+                        <option value="summer">تابستان</option>
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">گروه زمانی</label>
-                    <select id="tp-time_group" name="time_group" class="form-select">
-                        <option value="">خودکار</option>
-                        <option value="morning">صبح</option>
-                        <option value="afternoon">بعدازظهر</option>
-                        <option value="evening">عصر</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">زمان شروع *</label>
-                    <input type="text" id="tp-start_time" name="start_time" class="form-input" placeholder="07:30" dir="ltr" style="text-align:right;" required>
-                </div>
-                <div>
-                    <label class="form-label">زمان پایان *</label>
-                    <input type="text" id="tp-end_time" name="end_time" class="form-input" placeholder="09:15" dir="ltr" style="text-align:right;" required>
-                </div>
-                <div>
-                    <label class="form-label">نوع همکاری</label>
-                    <select id="tp-cooperation_type" name="cooperation_type" class="form-select">
-                        <option value="">انتخاب کنید...</option>
-                        <option value="هیئت علمی">هیئت علمی</option>
-                        <option value="تمام‌وقت">تمام‌وقت</option>
-                        <option value="نیم‌وقت">نیم‌وقت</option>
-                        <option value="ساعتی">ساعتی</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">گروه تخصصی</label>
-                    <input type="text" id="tp-expert_group" name="expert_group" class="form-input" placeholder="گروه">
-                </div>
-                <div>
-                    <label class="form-label">اولویت</label>
-                    <input type="number" id="tp-priority" name="priority" class="form-input" placeholder="0" min="0" value="0" dir="ltr">
-                </div>
-                <div>
-                    <label class="form-label">وضعیت</label>
-                    <select id="tp-status" name="status" class="form-select">
-                        <option value="1">فعال</option>
-                        <option value="0">غیرفعال</option>
+                    <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">تعداد واحد</label>
+                    <select id="tp-units" class="form-select" style="width:auto;" onchange="loadSlots()">
+                        <option value="1">۱ واحد</option>
+                        <option value="2" selected>۲ واحد</option>
+                        <option value="3">۳ واحد</option>
+                        <option value="4">۴ واحد</option>
                     </select>
                 </div>
             </div>
-            <div style="margin-top:14px;padding:14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:12px;color:var(--text-2);">
-                💡 برای دیدن اسلات‌های استاندارد، از <a href="/api/slot-times/search?term=mehr&units=2" target="_blank" style="color:var(--accent);">این لینک</a> استفاده کنید.
+
+            <!-- تقویم هفتگی -->
+            <div style="background:#f8fafc;border:1px solid var(--glass-border);border-radius:14px;padding:18px;margin-bottom:18px;">
+                <h4 style="font-size:14px;color:var(--text-1);margin-bottom:10px;">۱. روز هفته را انتخاب کنید</h4>
+                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;">
+                    <button class="day-btn" data-day="شنبه" onclick="selectDay('شنبه', this)">شنبه</button>
+                    <button class="day-btn" data-day="یکشنبه" onclick="selectDay('یکشنبه', this)">یکشنبه</button>
+                    <button class="day-btn" data-day="دوشنبه" onclick="selectDay('دوشنبه', this)">دوشنبه</button>
+                    <button class="day-btn" data-day="سه‌شنبه" onclick="selectDay('سه‌شنبه', this)">سه‌شنبه</button>
+                    <button class="day-btn" data-day="چهارشنبه" onclick="selectDay('چهارشنبه', this)">چهارشنبه</button>
+                    <button class="day-btn" data-day="پنجشنبه" onclick="selectDay('پنجشنبه', this)">پنجشنبه</button>
+                </div>
             </div>
-            <div style="display:flex;gap:10px;margin-top:20px;">
-                <button type="submit" class="btn btn-primary" style="flex:1;">💾 ذخیره</button>
-                <button type="button" onclick="closeTimeModal()" class="btn btn-ghost">❌ انصراف</button>
+
+            <!-- اسلات‌های زمانی -->
+            <div id="slots-section" style="display:none;">
+                <div style="background:#f8fafc;border:1px solid var(--glass-border);border-radius:14px;padding:18px;margin-bottom:18px;">
+                    <h4 style="font-size:14px;color:var(--text-1);margin-bottom:4px;">۲. بازه زمانی مورد نظر را انتخاب کنید</h4>
+                    <p id="day-info" style="font-size:12px;color:var(--text-3);margin-bottom:14px;"></p>
+                    <div id="slots-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+                        <!-- پر می‌شود -->
+                    </div>
+                </div>
             </div>
-        </form>
+
+            <!-- انتخاب‌های فعلی -->
+            <div id="selections-section">
+                <h4 style="font-size:14px;color:var(--text-1);margin-bottom:10px;">۳. انتخاب‌های فعلی شما</h4>
+                <div id="current-selections" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+                    <!-- پر می‌شود -->
+                </div>
+                <p id="no-selections" style="color:var(--text-3);font-size:13px;text-align:center;padding:20px;">هنوز هیچ زمانی انتخاب نکرده‌اید</p>
+            </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;border-top:1px solid var(--glass-border);background:#f8fafc;">
+            <div style="font-size:13px;color:var(--text-2);">
+                <span id="selected-slots-count">۰</span> بازه زمانی انتخاب‌شده
+            </div>
+            <div style="display:flex;gap:10px;">
+                <button onclick="closeTimePicker()" class="btn btn-ghost">❌ انصراف</button>
+                <button onclick="submitTimePicker()" class="btn btn-primary" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">💾 ذخیره همه</button>
+            </div>
+        </div>
     </div>
 </div>
+
+<style>
+.day-btn {
+    padding: 12px 8px;
+    background: white;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    transition: all 0.2s;
+}
+.day-btn:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+.day-btn.active {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+}
+.slot-card {
+    padding: 14px;
+    background: white;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    position: relative;
+}
+.slot-card:hover {
+    border-color: #8b5cf6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139,92,246,0.2);
+}
+.slot-card.selected {
+    background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(124,58,237,0.1));
+    border-color: #8b5cf6;
+}
+.slot-card .slot-time {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-1);
+    direction: ltr;
+    margin-bottom: 4px;
+}
+.slot-card .slot-period {
+    font-size: 11px;
+    color: var(--text-3);
+}
+.slot-card .priority-badge {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    background: #6366f1;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.course-pick-card {
+    padding: 14px;
+    background: white;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.course-pick-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+.course-pick-card.selected {
+    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(79,70,229,0.05));
+    border-color: var(--accent);
+}
+.course-pick-card .course-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.course-pick-card input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+}
+.course-pick-card .course-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-1);
+}
+.course-pick-card .course-meta {
+    font-size: 11px;
+    color: var(--text-3);
+}
+.selection-item {
+    background: white;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+}
+.selection-item .priority-circle {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+}
+.selection-item .selection-info {
+    flex: 1;
+    font-size: 12px;
+}
+.selection-item .selection-info strong {
+    color: var(--text-1);
+    display: block;
+    direction: ltr;
+    text-align: right;
+}
+.selection-item .selection-info span {
+    color: var(--text-3);
+    font-size: 10px;
+}
+.selection-item .remove-btn {
+    background: #fee2e2;
+    color: #ef4444;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.selection-item .remove-btn:hover {
+    background: #ef4444;
+    color: white;
+}
+</style>
 
 <script>
+// ===== State =====
+let allCourses = [];
+let selectedCourses = new Set();
+let currentDay = null;
+let allSlots = [];
+let selectedSlots = []; // [{day, slot, start, end, period, period_title}]
+
+const faDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+function toFa(n) {
+    return String(n).replace(/[0-9]/g, d => faDigits[d]);
+}
+
 // ===== تب‌ها =====
 function switchTab(tab) {
     document.getElementById('tab-teaching').style.display = tab === 'teaching' ? 'block' : 'none';
@@ -333,135 +457,356 @@ function switchTab(tab) {
 // ===== فیلتر =====
 function filterTeaching() {
     const q = document.getElementById('teaching-search').value.toLowerCase();
-    document.querySelectorAll('#teaching-table tbody tr').forEach(tr => {
+    document.querySelectorAll('#tab-teaching tbody tr').forEach(tr => {
         const text = (tr.dataset.search || '').toLowerCase();
         tr.style.display = text.includes(q) ? '' : 'none';
     });
 }
 function filterTime() {
     const q = document.getElementById('time-search').value.toLowerCase();
-    document.querySelectorAll('#time-table tbody tr').forEach(tr => {
+    document.querySelectorAll('#tab-time tbody tr').forEach(tr => {
         const text = (tr.dataset.search || '').toLowerCase();
         tr.style.display = text.includes(q) ? '' : 'none';
     });
 }
 
-// ===== مودال تدریس =====
-function openAddTeachingModal() {
-    document.getElementById('teaching-form').reset();
-    document.getElementById('teaching-id').value = '';
-    document.getElementById('teaching-modal').style.display = 'flex';
-}
-function closeTeachingModal() {
-    document.getElementById('teaching-modal').style.display = 'none';
-}
-function editTeaching(id) {
-    // fetch item
-    fetch('/api/teaching-preferences').then(r => r.json()).then(data => {
-        const item = data.items.find(i => i.id === id);
-        if (!item) return alert('رکورد یافت نشد');
-        document.getElementById('teaching-id').value = item.id;
-        document.getElementById('t-instructor_code').value = item.instructor_code || '';
-        document.getElementById('t-instructor_name').value = item.instructor_name || '';
-        document.getElementById('t-course_name').value = item.course_name || '';
-        document.getElementById('t-unique_course_code').value = item.unique_course_code || '';
-        document.getElementById('t-expert_group').value = item.expert_group || '';
-        document.getElementById('t-cooperation_type').value = item.cooperation_type || '';
-        document.getElementById('t-status').value = item.status || 'pending';
-        document.getElementById('t-term_code').value = item.term_code || '';
-        document.getElementById('teaching-modal').style.display = 'flex';
-    });
-}
-async function submitTeaching(e) {
-    e.preventDefault();
-    const form = e.target;
-    const data = {};
-    new FormData(form).forEach((v, k) => data[k] = v);
-    const id = data.id;
-    delete data.id;
-    const url = id ? `/api/teaching-preferences/${id}` : '/api/teaching-preferences';
-    const method = id ? 'PUT' : 'POST';
-    const r = await fetch(url, {
-        method,
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    });
-    const res = await r.json();
-    if (res.ok) {
-        alert(id ? 'ویرایش شد' : 'افزوده شد');
-        location.reload();
-    } else {
-        alert('خطا: ' + (res.error || 'نامشخص'));
+// ===== Course Picker =====
+async function openCoursePicker() {
+    document.getElementById('course-picker-modal').style.display = 'flex';
+    if (allCourses.length === 0) {
+        // fetch unique courses
+        try {
+            const r = await fetch('/api/courses/unique');
+            if (!r.ok) throw new Error('failed');
+            const data = await r.json();
+            allCourses = data.items || data.courses || [];
+        } catch (e) {
+            // fallback: empty
+            allCourses = [];
+        }
     }
-}
-async function deleteTeaching(id) {
-    if (!confirm('حذف شود؟')) return;
-    const r = await fetch(`/api/teaching-preferences/${id}`, {method: 'DELETE'});
-    const res = await r.json();
-    if (res.ok) location.reload();
-    else alert('خطا: ' + (res.error || 'نامشخص'));
+    selectedCourses.clear();
+    renderCourseList();
+    updateCourseCount();
 }
 
-// ===== مودال زمان =====
-function openAddTimeModal() {
-    document.getElementById('time-form').reset();
-    document.getElementById('time-id').value = '';
-    document.getElementById('tp-status').value = '1';
-    document.getElementById('tp-priority').value = '0';
-    document.getElementById('time-modal').style.display = 'flex';
+function closeCoursePicker() {
+    document.getElementById('course-picker-modal').style.display = 'none';
 }
-function closeTimeModal() {
-    document.getElementById('time-modal').style.display = 'none';
+
+function renderCourseList() {
+    const grid = document.getElementById('course-list-grid');
+    if (allCourses.length === 0) {
+        grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:20px;">دروسی برای نمایش وجود ندارد</p>';
+        return;
+    }
+    grid.innerHTML = allCourses.map(c => {
+        const id = c.id || c.unique_code;
+        const title = c.title || c.course_name || '';
+        const code = c.unique_code || c.code || '';
+        const group = c.course_group || c.group || '';
+        const isSelected = selectedCourses.has(id);
+        return `
+            <div class="course-pick-card ${isSelected ? 'selected' : ''}" data-id="${id}" data-title="${title}" onclick="toggleCourse(${id})">
+                <div class="course-check">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCourse(${id})">
+                    <div class="course-title">${title}</div>
+                </div>
+                <div class="course-meta">
+                    ${code ? `<code>${code}</code>` : ''}
+                    ${group ? ` • ${group}` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
-function editTime(id) {
-    fetch('/api/time-preferences').then(r => r.json()).then(data => {
-        const item = data.items.find(i => i.id === id);
-        if (!item) return alert('رکورد یافت نشد');
-        document.getElementById('time-id').value = item.id;
-        document.getElementById('tp-instructor_code').value = item.instructor_code || '';
-        document.getElementById('tp-instructor_name').value = item.instructor_name || '';
-        document.getElementById('tp-day').value = item.day || '';
-        document.getElementById('tp-time_group').value = item.time_group || '';
-        document.getElementById('tp-start_time').value = item.start_time || '';
-        document.getElementById('tp-end_time').value = item.end_time || '';
-        document.getElementById('tp-cooperation_type').value = item.cooperation_type || '';
-        document.getElementById('tp-expert_group').value = item.expert_group || '';
-        document.getElementById('tp-priority').value = item.priority || 0;
-        document.getElementById('tp-status').value = item.status ? '1' : '0';
-        document.getElementById('time-modal').style.display = 'flex';
+
+function filterCourseList() {
+    const q = document.getElementById('course-search-input').value.toLowerCase();
+    document.querySelectorAll('.course-pick-card').forEach(card => {
+        const text = (card.dataset.title || '').toLowerCase();
+        card.style.display = text.includes(q) ? '' : 'none';
     });
 }
-async function submitTime(e) {
-    e.preventDefault();
-    const form = e.target;
-    const data = {};
-    new FormData(form).forEach((v, k) => data[k] = v);
-    const id = data.id;
-    delete data.id;
-    // تبدیل status و priority به نوع درست
-    data.status = data.status === '1' || data.status === 'true';
-    if (data.priority) data.priority = parseInt(data.priority);
-    const url = id ? `/api/time-preferences/${id}` : '/api/time-preferences';
-    const method = id ? 'PUT' : 'POST';
-    const r = await fetch(url, {
-        method,
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    });
-    const res = await r.json();
-    if (res.ok) {
-        alert(id ? 'ویرایش شد' : 'افزوده شد');
-        location.reload();
+
+function toggleCourse(id) {
+    if (selectedCourses.has(id)) {
+        selectedCourses.delete(id);
     } else {
-        alert('خطا: ' + (res.error || 'نامشخص'));
+        selectedCourses.add(id);
+    }
+    // re-render
+    const card = document.querySelector(`.course-pick-card[data-id="${id}"]`);
+    if (card) {
+        card.classList.toggle('selected');
+        const cb = card.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = selectedCourses.has(id);
+    }
+    updateCourseCount();
+}
+
+function updateCourseCount() {
+    document.getElementById('selected-courses-count').textContent = toFa(selectedCourses.size);
+}
+
+async function submitCoursePicker() {
+    if (selectedCourses.size === 0) {
+        alert('لطفاً حداقل یک درس انتخاب کنید');
+        return;
+    }
+    // get admin user info
+    const admin = {{ admin | tojson }};
+    const instructorName = admin.full_name || admin.username;
+    const instructorUsername = admin.username;
+    const instructorCode = admin.username;
+
+    const items = [];
+    for (const id of selectedCourses) {
+        const course = allCourses.find(c => (c.id || c.unique_code) == id);
+        if (!course) continue;
+        items.push({
+            unique_course_code: course.unique_code || course.code || '',
+            course_name: course.title || course.course_name || '',
+            instructor_code: instructorCode,
+            instructor_name: instructorName,
+            instructor_username: instructorUsername,
+            expert_group: course.course_group || course.group || '',
+            cooperation_type: '',
+            status: 'pending',
+            term_code: '',
+        });
+    }
+    try {
+        const r = await fetch('/api/teaching-preferences/bulk', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({items}),
+        });
+        const res = await r.json();
+        if (res.ok) {
+            alert(toFa(res.count) + ' مطلوبیت تدریس ثبت شد');
+            closeCoursePicker();
+            location.reload();
+        } else {
+            alert('خطا: ' + (res.error || 'نامشخص'));
+        }
+    } catch (e) {
+        alert('خطا: ' + e.message);
     }
 }
+
+// ===== Time Slot Picker =====
+async function openTimePicker() {
+    document.getElementById('time-picker-modal').style.display = 'flex';
+    selectedSlots = [];
+    currentDay = null;
+    document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('slots-section').style.display = 'none';
+    renderSelections();
+}
+
+function closeTimePicker() {
+    document.getElementById('time-picker-modal').style.display = 'none';
+}
+
+function selectDay(day, btn) {
+    document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDay = day;
+    document.getElementById('slots-section').style.display = 'block';
+    document.getElementById('day-info').textContent = `روز ${day} — بازه‌های معتبر برای ترم و واحد انتخاب‌شده:`;
+    loadSlots();
+}
+
+async function loadSlots() {
+    const term = document.getElementById('tp-term').value;
+    const units = document.getElementById('tp-units').value;
+    const grid = document.getElementById('slots-grid');
+    grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:10px;">در حال بارگذاری...</p>';
+    try {
+        const r = await fetch(`/api/slot-times/search?term=${term}&units=${units}`);
+        const data = await r.json();
+        const slots = data.slots || [];
+        allSlots = slots;
+        if (slots.length === 0) {
+            grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:10px;">اسلاتی یافت نشد</p>';
+            return;
+        }
+        grid.innerHTML = slots.map(s => {
+            // check if already selected for this day
+            const alreadySelected = selectedSlots.find(x => x.day === currentDay && x.slot === s.slot);
+            return `
+                <div class="slot-card ${alreadySelected ? 'selected' : ''}" data-slot="${s.slot}" data-start="${s.start}" data-end="${s.end}" data-period="${s.period}" data-period-title="${s.period_title}" onclick="toggleSlot(this)">
+                    ${alreadySelected ? `<div class="priority-badge">${toFa(alreadySelected.priority)}</div>` : ''}
+                    <div class="slot-time">${s.start} - ${s.end}</div>
+                    <div class="slot-period">${s.period_title}</div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        grid.innerHTML = `<p style="grid-column:1/-1;text-align:center;color:var(--danger);padding:10px;">خطا: ${e.message}</p>`;
+    }
+}
+
+function toggleSlot(card) {
+    if (!currentDay) {
+        alert('ابتدا یک روز انتخاب کنید');
+        return;
+    }
+    const slot = card.dataset.slot;
+    const start = card.dataset.start;
+    const end = card.dataset.end;
+    const period = card.dataset.period;
+    const periodTitle = card.dataset.periodTitle;
+
+    // check if already selected
+    const existingIdx = selectedSlots.findIndex(x => x.day === currentDay && x.slot === slot);
+    if (existingIdx >= 0) {
+        // remove
+        selectedSlots.splice(existingIdx, 1);
+    } else {
+        // add — priority = count + 1
+        selectedSlots.push({
+            day: currentDay,
+            slot: slot,
+            start_time: start,
+            end_time: end,
+            period: period,
+            period_title: periodTitle,
+            priority: selectedSlots.length + 1,
+        });
+    }
+    // re-number priorities
+    selectedSlots.forEach((s, i) => s.priority = i + 1);
+
+    // refresh slot display
+    loadSlots();
+    renderSelections();
+}
+
+function renderSelections() {
+    const container = document.getElementById('current-selections');
+    const emptyMsg = document.getElementById('no-selections');
+    const countEl = document.getElementById('selected-slots-count');
+    countEl.textContent = toFa(selectedSlots.length);
+
+    if (selectedSlots.length === 0) {
+        container.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        return;
+    }
+    emptyMsg.style.display = 'none';
+
+    // group by day
+    const byDay = {};
+    selectedSlots.forEach(s => {
+        if (!byDay[s.day]) byDay[s.day] = [];
+        byDay[s.day].push(s);
+    });
+
+    let html = '';
+    for (const [day, items] of Object.entries(byDay)) {
+        html += `<div style="grid-column:1/-1;background:#f1f5f9;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;">${day}</div>`;
+        items.forEach((s, idx) => {
+            const realIdx = selectedSlots.indexOf(s);
+            html += `
+                <div class="selection-item">
+                    <div class="priority-circle">${toFa(s.priority)}</div>
+                    <div class="selection-info">
+                        <strong>${s.start_time} - ${s.end_time}</strong>
+                        <span>${s.day} • ${s.period_title}</span>
+                    </div>
+                    <button class="remove-btn" onclick="removeSelection(${realIdx})">✕</button>
+                </div>
+            `;
+        });
+    }
+    container.innerHTML = html;
+}
+
+function removeSelection(idx) {
+    selectedSlots.splice(idx, 1);
+    selectedSlots.forEach((s, i) => s.priority = i + 1);
+    loadSlots();
+    renderSelections();
+}
+
+async function submitTimePicker() {
+    if (selectedSlots.length === 0) {
+        alert('لطفاً حداقل یک بازه زمانی انتخاب کنید');
+        return;
+    }
+    const admin = {{ admin | tojson }};
+    const items = selectedSlots.map(s => ({
+        day: s.day,
+        instructor_code: admin.username,
+        instructor_name: admin.full_name || admin.username,
+        instructor_username: admin.username,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        time_group: s.period,
+        priority: s.priority,
+        status: true,
+    }));
+    try {
+        const r = await fetch('/api/time-preferences/bulk', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({items}),
+        });
+        const res = await r.json();
+        if (res.ok) {
+            alert(toFa(res.count) + ' مطلوبیت زمان ثبت شد');
+            closeTimePicker();
+            location.reload();
+        } else {
+            alert('خطا: ' + (res.error || 'نامشخص'));
+        }
+    } catch (e) {
+        alert('خطا: ' + e.message);
+    }
+}
+
+// ===== Old edit/delete (نسخه ساده) =====
+async function editTeaching(id) {
+    // simple prompt-based edit
+    const items = await (await fetch('/api/teaching-preferences')).json();
+    const item = items.items.find(i => i.id === id);
+    if (!item) return;
+    const newStatus = prompt('وضعیت جدید را وارد کنید (pending/approved/rejected):', item.status || 'pending');
+    if (newStatus === null) return;
+    const r = await fetch(`/api/teaching-preferences/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: newStatus, course_name: item.course_name, instructor_name: item.instructor_name, unique_course_code: item.unique_course_code, expert_group: item.expert_group, cooperation_type: item.cooperation_type, term_code: item.term_code})
+    });
+    if ((await r.json()).ok) location.reload();
+}
+
+async function deleteTeaching(id) {
+    if (!confirm('حذف شود؟')) return;
+    const r = await fetch(`/api/teaching-preferences/${id}`, {method:'DELETE'});
+    if ((await r.json()).ok) location.reload();
+}
+
+async function editTime(id) {
+    const items = await (await fetch('/api/time-preferences')).json();
+    const item = items.items.find(i => i.id === id);
+    if (!item) return;
+    const newPriority = prompt('اولویت جدید:', item.priority || 0);
+    if (newPriority === null) return;
+    const r = await fetch(`/api/time-preferences/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({priority: parseInt(newPriority), day: item.day, instructor_name: item.instructor_name, instructor_code: item.instructor_code, start_time: item.start_time, end_time: item.end_time, time_group: item.time_group, status: item.status})
+    });
+    if ((await r.json()).ok) location.reload();
+}
+
 async function deleteTime(id) {
     if (!confirm('حذف شود؟')) return;
-    const r = await fetch(`/api/time-preferences/${id}`, {method: 'DELETE'});
-    const res = await r.json();
-    if (res.ok) location.reload();
-    else alert('خطا: ' + (res.error || 'نامشخص'));
+    const r = await fetch(`/api/time-preferences/${id}`, {method:'DELETE'});
+    if ((await r.json()).ok) location.reload();
 }
 
 // ===== آپلود اکسل =====
@@ -469,30 +814,21 @@ async function uploadTeachingExcel(input) {
     if (!input.files[0]) return;
     const fd = new FormData();
     fd.append('file', input.files[0]);
-    const r = await fetch('/api/teaching-preferences/upload', {method: 'POST', body: fd});
+    const r = await fetch('/api/teaching-preferences/upload', {method:'POST', body: fd});
     const res = await r.json();
-    if (res.ok) {
-        alert(res.message + (res.errors && res.errors.length ? '\nخطاها:\n' + res.errors.join('\n') : ''));
-        location.reload();
-    } else {
-        alert('خطا:\n' + (res.message || res.error || '') + (res.errors ? '\n' + res.errors.join('\n') : ''));
-    }
+    alert(res.message || res.error || '');
+    if (res.ok || res.count > 0) location.reload();
     input.value = '';
 }
 async function uploadTimeExcel(input) {
     if (!input.files[0]) return;
-    const term = document.getElementById('time-upload-term').value;
     const fd = new FormData();
     fd.append('file', input.files[0]);
-    fd.append('term', term);
-    const r = await fetch(`/api/time-preferences/upload?term=${term}`, {method: 'POST', body: fd});
+    fd.append('term', 'mehr');
+    const r = await fetch('/api/time-preferences/upload?term=mehr', {method:'POST', body: fd});
     const res = await r.json();
-    if (res.ok) {
-        alert(res.message + (res.errors && res.errors.length ? '\nخطاها:\n' + res.errors.join('\n') : ''));
-        location.reload();
-    } else {
-        alert('خطا:\n' + (res.message || res.error || '') + (res.errors ? '\n' + res.errors.join('\n') : ''));
-    }
+    alert(res.message || res.error || '');
+    if (res.ok || res.count > 0) location.reload();
     input.value = '';
 }
 </script>
