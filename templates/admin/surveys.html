@@ -1,0 +1,150 @@
+{% extends "admin/base.html" %}
+{% block title %}مدیریت نظرسنجی‌ها{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>مدیریت نظرسنجی‌ها</h1>
+        <div class="breadcrumb">خانه / نظرسنجی‌ها</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-modal').style.display='flex'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            ساخت نظرسنجی جدید
+        </button>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    ℹ️ تنها <strong>یک نظرسنجی</strong> می‌تواند همزمان فعال باشد.
+    وقتی نظرسنجی جدیدی را فعال می‌کنید، بقیه خودکار غیرفعال می‌شوند.
+    دانشجویان تنها می‌توانند به نظرسنجی فعال پیشنهاد بدهند.
+</div>
+
+<div class="card">
+    <p style="font-size:12px;color:var(--text-3);margin-bottom:12px;">مجموع {{ surveys|length }} نظرسنجی</p>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>نام نظرسنجی</th>
+                <th>ترم</th>
+                <th>سال</th>
+                <th>مهلت</th>
+                <th>شرکت‌کنندگان</th>
+                <th>پیشنهادها</th>
+                <th>وضعیت</th>
+                <th>تاریخ ایجاد</th>
+                <th>عملیات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in surveys %}
+            <tr>
+                <td>{{ s.id }}</td>
+                <td><strong>{{ s.name }}</strong></td>
+                <td>{{ s.semester }}</td>
+                <td>{{ s.year }}</td>
+                <td>{{ s.deadline or '—' }}</td>
+                <td>{{ s.participants }}</td>
+                <td>{{ s.requests_count }}</td>
+                <td>
+                    {% if s.is_active %}
+                    <span class="badge badge-success">● فعال</span>
+                    {% else %}
+                    <span class="badge badge-warning">غیرفعال</span>
+                    {% endif %}
+                </td>
+                <td><small>{{ s.created_at[:16] if s.created_at else '—' }}</small></td>
+                <td class="actions-cell">
+                    {% if not s.is_active %}
+                    <form method="POST" action="{{ url_for('admin_survey_activate', survey_id=s.id) }}" style="display:inline;">
+                        <button type="submit" class="btn btn-ghost btn-sm" title="فعال‌سازی"
+                                onclick="return confirm('این نظرسنجی فعال شود؟ سایر نظرسنجی‌ها غیرفعال خواهند شد.')">
+                            ✓ فعال‌سازی
+                        </button>
+                    </form>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('admin_survey_close', survey_id=s.id) }}" style="display:inline;">
+                        <button type="submit" class="btn btn-ghost btn-sm" title="بستن">🔒 بستن</button>
+                    </form>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('admin_survey_delete', survey_id=s.id) }}" style="display:inline;"
+                          onsubmit="return confirm('حذف شود؟ (فقط نظرسنجی‌های بدون پیشنهاد قابل حذف هستند)')">
+                        <button type="submit" class="btn btn-danger btn-sm" title="حذف">×</button>
+                    </form>
+
+                    {% if admin.role == 'super_admin' %}
+                    <form method="POST"
+                          action="{{ url_for('admin_survey_reset_responses', survey_id=s.id) }}"
+                          style="display:inline;"
+                          onsubmit="return confirm('تمام پاسخ‌های این نظرسنجی پاک می‌شوند. کاربران، دروس و خود نظرسنجی باقی می‌مانند. ادامه می‌دهید؟')">
+                        <input type="hidden" name="reset_token"
+                               value="{{ session.get('survey_reset_token', '') }}">
+                        <input type="hidden" name="confirm_survey_id" value="{{ s.id }}">
+                        <button type="submit" class="btn btn-danger btn-sm"
+                                {% if s.is_active %}disabled{% endif %}
+                                title="ابتدا نظرسنجی را ببندید؛ قبل از پاک‌کردن، پشتیبان دیتابیس ذخیره می‌شود">
+                            پاک‌کردن پاسخ‌ها
+                        </button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-3);">نظرسنجی‌ای ساخته نشده است.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal ساخت نظرسنجی جدید -->
+<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="max-width:520px;width:100%;">
+        <div class="card-header">
+            <div class="card-title">ساخت نظرسنجی جدید</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('add-modal').style.display='none'">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_survey_add') }}">
+            <div class="form-group">
+                <label class="form-label">نام نظرسنجی *</label>
+                <input type="text" name="name" class="form-input" placeholder="مثال: بهمن ۱۴۰۵" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">ترم *</label>
+                    <select name="semester" class="form-select" required>
+                        <option value="بهمن">بهمن</option>
+                        <option value="تابستان">تابستان</option>
+                        <option value="زمستان">زمستان</option>
+                        <option value="پاییز">پاییز</option>
+                        <option value="بهار">بهار</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">سال *</label>
+                    <input type="number" name="year" class="form-input" value="1405" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">تاریخ شروع</label>
+                    <input type="text" name="start_date" class="form-input" placeholder="1405-11-01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">تاریخ پایان</label>
+                    <input type="text" name="end_date" class="form-input" placeholder="1405-11-30">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">مهلت نظرسنجی</label>
+                <input type="text" name="deadline" class="form-input" placeholder="1405-10-25">
+            </div>
+            <div class="alert alert-info" style="font-size:12px;">
+                پس از ساخت، نظرسنجی <strong>غیرفعال</strong> خواهد بود. باید آن را فعال کنید تا برای دانشجویان نمایش داده شود.
+            </div>
+            <button type="submit" class="btn btn-primary">ساخت نظرسنجی</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

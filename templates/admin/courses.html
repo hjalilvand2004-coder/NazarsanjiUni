@@ -1,0 +1,280 @@
+{% extends "admin/base.html" %}
+{% block title %}دروس تفکیکی{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>دروس تفکیکی (به تفکیک دوره)</h1>
+        <div class="breadcrumb">خانه / دروس / دروس تفکیکی</div>
+    </div>
+    <div class="actions">
+        <a href="{{ url_for('admin_unique_courses') }}" class="btn btn-ghost btn-sm">📚 دروس یکتا</a>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-modal').style.display='flex'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            افزودن درس تفکیکی
+        </button>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    📋 این جدول <strong>دروس تفکیکی بر اساس سال ورود و نوع کارشناسی</strong> است که از فایل <code>CourceListDetail.xlsx</code> بارگذاری شده.
+    هر ردیف یک درس خاص برای یک سال و نوع (پیوسته/ناپیوسته) است.
+</div>
+
+<div class="card">
+    <!-- فیلترها -->
+    <form method="GET" class="search-bar" style="flex-wrap:wrap;">
+        <input type="text" name="q" value="{{ search }}" placeholder="🔍 جستجوی عنوان درس..." style="flex:1;min-width:200px;">
+        <select name="year" class="form-select" style="width:auto;flex:0 0 auto;">
+            <option value="">همه سال‌ها</option>
+            <option value="1394" {% if filter_year == '1394' %}selected{% endif %}>۱۳۹۴ (پیوسته قدیمی)</option>
+            <option value="1403" {% if filter_year == '1403' %}selected{% endif %}>۱۴۰۳ (پیوسته جدید)</option>
+            <option value="100" {% if filter_year == '100' %}selected{% endif %}>۱۰۰ (ناپیوسته)</option>
+        </select>
+        <select name="type" class="form-select" style="width:auto;flex:0 0 auto;">
+            <option value="">همه انواع</option>
+            <option value="پیوسته" {% if filter_type == 'پیوسته' %}selected{% endif %}>پیوسته</option>
+            <option value="ناپیوسته" {% if filter_type == 'ناپیوسته' %}selected{% endif %}>ناپیوسته</option>
+        </select>
+        <select name="section" class="form-select" style="width:auto;flex:0 0 auto;">
+            <option value="">همه بخش‌ها</option>
+            <option value="basic" {% if filter_section == 'basic' %}selected{% endif %}>پایه</option>
+            <option value="core" {% if filter_section == 'core' %}selected{% endif %}>اصلی</option>
+            <option value="specialized" {% if filter_section == 'specialized' %}selected{% endif %}>تخصصی</option>
+            <option value="specialized_ai" {% if filter_section == 'specialized_ai' %}selected{% endif %}>تخصصی هوش</option>
+            <option value="specialized_sw" {% if filter_section == 'specialized_sw' %}selected{% endif %}>تخصصی نرم‌افزار</option>
+            <option value="electives" {% if filter_section == 'electives' %}selected{% endif %}>اختیاری</option>
+        </select>
+        <button type="submit" class="btn btn-ghost btn-sm">اعمال فیلتر</button>
+        <a href="{{ url_for('admin_courses') }}" class="btn btn-ghost btn-sm">پاک</a>
+    </form>
+
+    <p style="font-size:12px;color:var(--text-3);margin-bottom:12px;">
+        نمایش {{ courses|length }} درس
+    </p>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ردیف</th>
+                <th>عنوان درس</th>
+                <th>کد یکتا</th>
+                <th>بخش</th>
+                <th>سال</th>
+                <th>نوع</th>
+                <th>نظری</th>
+                <th>عملی</th>
+                <th>پیش‌نیاز</th>
+                <th>ظرفیت</th>
+                <th>عملیات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in courses %}
+            <tr>
+                <td>{{ c.row_number }}</td>
+                <td>{{ c.course_title }}</td>
+                <td>{% if c.unique_code %}<strong>{{ c.unique_code }}</strong>{% else %}—{% endif %}</td>
+                <td>
+                    {% set labels = {'basic':'پایه','core':'اصلی','specialized':'تخصصی','specialized_ai':'هوش','specialized_sw':'نرم‌افزار','specialized_elective_sw':'اختیاری نرم‌افزار','electives':'اختیاری','Prerequisite':'پیش‌نیاز'} %}
+                    <span class="badge badge-primary">{{ labels.get(c.section, c.section) }}</span>
+                </td>
+                <td>
+                    {% if c.year == 100 %}ناپیوسته
+                    {% else %}{{ c.year }}{% endif %}
+                </td>
+                <td>{{ c.type_coures or '—' }}</td>
+                <td>{{ c.theory_credits or '—' }}</td>
+                <td>{{ c.practical_credits or '—' }}</td>
+                <td><small>{{ c.prerequisite or '—' }}</small></td>
+                <td>{{ c.capacity_estimate or '—' }}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-ghost btn-sm" onclick="editCourse({{ c.id }}, '{{ c.course_title|e }}', '{{ c.section }}', {{ c.year }}, '{{ c.type_coures|e }}', {{ c.theory_credits or 'null' }}, {{ c.practical_credits or 'null' }}, '{{ c.prerequisite|e }}', '{{ c.unique_code or '' }}', {{ c.capacity_estimate or 30 }}, {{ c.row_number or 0 }})"
+                            title="ویرایش">✎</button>
+                    <form method="POST" action="{{ url_for('admin_course_delete', course_id=c.id) }}" style="display:inline;"
+                          onsubmit="return confirm('درس حذف شود؟')">
+                        <button type="submit" class="btn btn-danger btn-sm" title="حذف">×</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-3);">دروسی با این فیلترها یافت نشد.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal افزودن درس تفکیکی -->
+<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto;">
+        <div class="card-header">
+            <div class="card-title">افزودن درس تفکیکی</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('add-modal').style.display='none'">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_course_add') }}">
+            <div class="form-group">
+                <label class="form-label">عنوان درس *</label>
+                <input type="text" name="course_title" class="form-input" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">کد یکتا (اختیاری)</label>
+                    <input type="number" name="unique_code" class="form-input" placeholder="مثلا 1044">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">بخش *</label>
+                    <select name="section" class="form-select">
+                        <option value="basic">پایه</option>
+                        <option value="core">اصلی</option>
+                        <option value="specialized">تخصصی</option>
+                        <option value="specialized_ai">تخصصی هوش</option>
+                        <option value="specialized_sw">تخصصی نرم‌افزار</option>
+                        <option value="specialized_elective_sw">تخصصی اختیاری نرم‌افزار</option>
+                        <option value="electives">اختیاری</option>
+                        <option value="Prerequisite">پیش‌نیاز</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row-3">
+                <div class="form-group">
+                    <label class="form-label">سال ورودی *</label>
+                    <select name="year" class="form-select">
+                        <option value="1394">۱۳۹۴ (پیوسته قدیمی)</option>
+                        <option value="1403">۱۴۰۳ (پیوسته جدید)</option>
+                        <option value="100">۱۰۰ (ناپیوسته)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">نوع *</label>
+                    <select name="type_coures" class="form-select">
+                        <option value="پیوسته">پیوسته</option>
+                        <option value="ناپیوسته">ناپیوسته</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">شماره ردیف</label>
+                    <input type="number" name="row_number" class="form-input" value="0">
+                </div>
+            </div>
+            <div class="form-row-3">
+                <div class="form-group">
+                    <label class="form-label">نظری</label>
+                    <input type="number" name="theory_credits" class="form-input" placeholder="3">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">عملی</label>
+                    <input type="number" name="practical_credits" class="form-input" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ظرفیت</label>
+                    <input type="number" name="capacity_estimate" class="form-input" value="30">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">پیش‌نیاز</label>
+                    <input type="text" name="prerequisite" class="form-input" placeholder="—">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">هم‌نیاز</label>
+                    <input type="text" name="corequisite" class="form-input" placeholder="—">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">افزودن درس</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal ویرایش درس تفکیکی -->
+<div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto;">
+        <div class="card-header">
+            <div class="card-title">ویرایش درس تفکیکی</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('edit-modal').style.display='none'">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_course_update') }}">
+            <input type="hidden" name="course_id" id="edit-id">
+            <div class="form-group">
+                <label class="form-label">عنوان درس</label>
+                <input type="text" name="course_title" id="edit-title" class="form-input" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">کد یکتا</label>
+                    <input type="number" name="unique_code" id="edit-unique" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">بخش</label>
+                    <select name="section" id="edit-section" class="form-select">
+                        <option value="basic">پایه</option>
+                        <option value="core">اصلی</option>
+                        <option value="specialized">تخصصی</option>
+                        <option value="specialized_ai">تخصصی هوش</option>
+                        <option value="specialized_sw">تخصصی نرم‌افزار</option>
+                        <option value="specialized_elective_sw">تخصصی اختیاری نرم‌افزار</option>
+                        <option value="electives">اختیاری</option>
+                        <option value="Prerequisite">پیش‌نیاز</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row-3">
+                <div class="form-group">
+                    <label class="form-label">سال</label>
+                    <select name="year" id="edit-year" class="form-select">
+                        <option value="1394">۱۳۹۴</option>
+                        <option value="1403">۱۴۰۳</option>
+                        <option value="100">۱۰۰ (ناپیوسته)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">نوع</label>
+                    <select name="type_coures" id="edit-type" class="form-select">
+                        <option value="پیوسته">پیوسته</option>
+                        <option value="ناپیوسته">ناپیوسته</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ردیف</label>
+                    <input type="number" name="row_number" id="edit-row" class="form-input">
+                </div>
+            </div>
+            <div class="form-row-3">
+                <div class="form-group">
+                    <label class="form-label">نظری</label>
+                    <input type="number" name="theory_credits" id="edit-theory" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">عملی</label>
+                    <input type="number" name="practical_credits" id="edit-practical" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ظرفیت</label>
+                    <input type="number" name="capacity_estimate" id="edit-capacity" class="form-input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">پیش‌نیاز</label>
+                <input type="text" name="prerequisite" id="edit-prereq" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">ذخیره تغییرات</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function editCourse(id, title, section, year, type, theory, practical, prereq, uniqueCode, capacity, rowNum) {
+    document.getElementById('edit-id').value = id;
+    document.getElementById('edit-title').value = title;
+    document.getElementById('edit-section').value = section;
+    document.getElementById('edit-year').value = year;
+    document.getElementById('edit-type').value = type;
+    document.getElementById('edit-theory').value = theory || '';
+    document.getElementById('edit-practical').value = practical || '';
+    document.getElementById('edit-prereq').value = prereq;
+    document.getElementById('edit-unique').value = uniqueCode || '';
+    document.getElementById('edit-capacity').value = capacity;
+    document.getElementById('edit-row').value = rowNum;
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+</script>
+{% endblock %}

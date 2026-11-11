@@ -1,0 +1,70 @@
+{% extends "admin/base.html" %}
+{% block title %}تنظیمات سامانه{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>تنظیمات سامانه</h1>
+        <div class="breadcrumb">خانه / سیستم / تنظیمات</div>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('admin_settings') }}">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">تنظیمات عمومی</div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">عنوان نظرسنجی</label>
+            <input type="text" name="survey_title" class="form-input"
+                   value="{{ settings.get('survey_title', 'نظرسنجی دروس ترم بهمن ۱۴۰۴') }}">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">پیام خوش‌آمد</label>
+            <textarea name="welcome_message" class="form-input">{{ settings.get('welcome_message', '') }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">ایمیل تماس</label>
+            <input type="email" name="contact_email" class="form-input"
+                   value="{{ settings.get('contact_email', 'admin@example.com') }}">
+        </div>
+
+        <button type="submit" class="btn btn-primary">ذخیره تنظیمات</button>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">اطلاعات سامانه</div>
+    </div>
+    <table class="table">
+        <tr>
+            <td style="color:var(--text-3);width:200px;">نسخه فعلی</td>
+            <td><strong>v{{ APP_VERSION }}</strong></td>
+        </tr>
+        <tr>
+            <td style="color:var(--text-3);">ترم فعال</td>
+            <td>{{ SEMESTER_LABEL }}</td>
+        </tr>
+        <tr>
+            <td style="color:var(--text-3);">مهلت نظرسنجی</td>
+            <td>{{ SURVEY_DEADLINE }}</td>
+        </tr>
+        <tr>
+            <td style="color:var(--text-3);">تاریخ انتشار</td>
+            <td>{{ APP_RELEASE_DATE }}</td>
+        </tr>
+        <tr>
+            <td style="color:var(--text-3);">آدرس مینی‌اپ</td>
+            <td><code>{{ WEB_APP_URL }}</code></td>
+        </tr>
+        <tr>
+            <td style="color:var(--text-3);">آدرس وب‌سایت</td>
+            <td><code>http://188.212.96.235:8080</code></td>
+        </tr>
+    </table>
+</div>
+{% endblock %}

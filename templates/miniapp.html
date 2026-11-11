@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f0c29">
+    <title>نظرسنجی دروس — {{ semester }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <script src="https://tapi.bale.ai/miniapp.js?5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='miniapp/style.css') }}?v={{ version }}">
+</head>
+<body>
+    <div class="aurora-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+        <div class="grid-overlay"></div>
+    </div>
+
+    <header class="app-header glass">
+        <div class="header-row">
+            <div class="app-title">
+                <div class="logo-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                    </svg>
+                </div>
+                <div class="title-text">
+                    <span class="title-main">نظرسنجی دروس</span>
+                    <span class="title-sub">{{ semester }}</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" id="btn-notif" title="اعلان‌ها">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                    <span class="badge-dot" id="notif-dot"></span>
+                </button>
+                <button class="icon-btn" id="btn-theme" title="تغییر تم">
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                </button>
+            </div>
+        </div>
+        <div id="header-user" class="header-user"></div>
+    </header>
+
+    <main class="app-body">
+        <section id="page-auth" class="page"></section>
+        <section id="page-register" class="page" hidden></section>
+        <section id="page-dashboard" class="page" hidden></section>
+        <section id="page-courses" class="page" hidden></section>
+        <section id="page-profile" class="page" hidden></section>
+        <section id="page-done" class="page" hidden></section>
+        <section id="page-admin" class="page" hidden></section>
+    </main>
+
+    <nav class="bottom-nav glass" id="bottom-nav">
+        <button class="nav-btn active" data-page="dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>خانه</span>
+        </button>
+        <button class="nav-btn" data-page="courses">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <span>دروس</span>
+        </button>
+        <button class="nav-btn" data-page="profile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>پروفایل</span>
+        </button>
+        <button class="nav-btn admin-only" data-page="admin" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+            <span>مدیریت</span>
+        </button>
+    </nav>
+
+    <div class="toast" id="toast"></div>
+    <div class="notif-panel glass" id="notif-panel" hidden>
+        <div class="notif-header">
+            <h3>اعلان‌ها</h3>
+            <button class="icon-btn" id="btn-close-notif">✕</button>
+        </div>
+        <div class="notif-list" id="notif-list"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='miniapp/app.js') }}?v={{ version }}&authfix=1&submitfix=20261009-123441"></script>
+</body>
+</html>

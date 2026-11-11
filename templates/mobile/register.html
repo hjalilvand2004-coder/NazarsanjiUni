@@ -1,0 +1,57 @@
+{% extends "mobile/base.html" %}
+{% block title %}ثبت‌نام — دانشجو360{% endblock %}
+
+{% block content %}
+<div class="hero-card glass" style="padding:28px 22px;">
+    <div class="hero-icon">📝</div>
+    <h1 class="hero-title">ثبت‌نام دانشجو</h1>
+    <p class="hero-sub">برای شرکت در نظرسنجی، ثبت‌نام کنید</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}">
+        <div class="alert-icon">ℹ️</div>
+        <div>{{ msg }}</div>
+    </div>
+    {% endfor %}
+{% endwith %}
+
+<div class="card glass">
+    <form method="POST" action="/register">
+        <div class="form-group">
+            <label class="form-label">نام و نام خانوادگی *</label>
+            <input type="text" name="name" class="form-input" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">شماره تماس *</label>
+            <input type="tel" name="phone" class="form-input" placeholder="09123456789" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">شماره دانشجویی *</label>
+            <input type="text" name="student_number" class="form-input" placeholder="9 یا 14 رقم" required>
+            <small style="color:var(--text-3);font-size:10px;display:block;margin-top:4px;">
+                پیشوندهای معتبر: ۹۴-۹۹، ۴۰۰-۴۰۵
+            </small>
+        </div>
+        <div class="form-group">
+            <label class="form-label">نوع کارشناسی *</label>
+            <select name="student_type" class="form-select" required>
+                <option value="">انتخاب کنید...</option>
+                <option value="پیوسته">پیوسته</option>
+                <option value="ناپیوسته">ناپیوسته</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">رمز عبور *</label>
+            <input type="password" name="password" class="form-input" placeholder="حداقل ۶ کاراکتر" required>
+        </div>
+        <button type="submit" class="btn btn-primary">ثبت‌نام</button>
+    </form>
+</div>
+
+<div style="text-align:center;padding:16px;color:var(--text-3);font-size:12px;">
+    قبلاً ثبت‌نام کرده‌اید؟ 
+    <a href="/app/login" style="color:var(--accent);font-weight:600;">ورود</a>
+</div>
+{% endblock %}

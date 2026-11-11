@@ -1,0 +1,42 @@
+{% extends "mobile/base.html" %}
+{% block title %}دروس — دانشجو360{% endblock %}
+
+{% block content %}
+<div class="hero-card glass" style="padding:20px;">
+    <h1 class="hero-title" style="font-size:18px;">فهرست دروس</h1>
+    <p class="hero-sub" style="margin-bottom:0;">مجموع {{ courses|length }} درس فعال</p>
+</div>
+
+<div class="card glass" style="padding:8px 16px;">
+    <input type="text" id="course-search" class="form-input" placeholder="🔍 جستجوی درس...">
+</div>
+
+<div class="course-list">
+    {% for c in courses %}
+    <div class="course-item glass" data-name="{{ c.course_title }}">
+        <div class="course-icon">{{ loop.index }}</div>
+        <div class="course-info">
+            <div class="course-name">{{ c.course_title }}</div>
+            <div class="course-meta">
+                {% if c.section %}
+                <span class="tag">{{ c.section }}</span>
+                {% endif %}
+                {% if c.credits %}
+                <span>🕒 {{ c.credits }} واحد</span>
+                {% endif %}
+                {% if c.year %}
+                <span>📅 {{ c.year }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="emoji">📚</div>
+        <p>دروسی موجود نیست</p>
+    </div>
+    {% endfor %}
+</div>
+
+<div style="height:40px;"></div>
+{% endblock %}

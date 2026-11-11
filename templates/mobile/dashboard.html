@@ -1,0 +1,58 @@
+{% extends "mobile/base.html" %}
+{% block title %}داشبورد زنده — دانشجو360{% endblock %}
+
+{% block content %}
+<div class="hero-card glass" style="padding:20px;">
+    <h1 class="hero-title" style="font-size:18px;">داشبورد زنده</h1>
+    <p class="hero-sub" style="margin-bottom:0;">آمار لحظه‌ای سامانه — به‌روزرسانی خودکار</p>
+</div>
+
+<div class="stats-strip">
+    <div class="stat-card glass">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+        <div class="num" id="stat-users">{{ stats.total_users }}</div>
+        <div class="label">دانشجوی ثبت‌شده</div>
+    </div>
+    <div class="stat-card glass">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+        <div class="num" id="stat-requests">{{ stats.total_requests }}</div>
+        <div class="label">پیشنهاد ثبت‌شده</div>
+    </div>
+    <div class="stat-card glass">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
+        <div class="num" id="stat-participants">{{ stats.participants }}</div>
+        <div class="label">شرکت‌کننده فعال</div>
+    </div>
+    <div class="stat-card glass">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        <div class="num" id="stat-courses">{{ stats.total_courses }}</div>
+        <div class="label">درس موجود</div>
+    </div>
+</div>
+
+<div class="section-title">دروس پرتقاضا</div>
+<div class="card glass" style="margin-top:0;">
+    {% if stats.top_courses %}
+        {% for c in stats.top_courses[:10] %}
+        <div class="course-item glass" style="margin-bottom:6px;">
+            <div class="course-icon">{{ loop.index }}</div>
+            <div class="course-info">
+                <div class="course-name">{{ c.title }}</div>
+                <div class="course-meta">
+                    <span class="tag">{{ c.count }} پیشنهاد</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="empty-state">
+        <div class="emoji">📊</div>
+        <p>هنوز پیشنهادی ثبت نشده</p>
+    </div>
+    {% endif %}
+</div>
+
+<div style="text-align:center;padding:20px 16px 40px;color:var(--text-3);font-size:11px;">
+    به‌روزرسانی خودکار هر ۳۰ ثانیه
+</div>
+{% endblock %}

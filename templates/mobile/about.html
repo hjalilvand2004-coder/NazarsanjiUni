@@ -1,0 +1,68 @@
+{% extends "mobile/base.html" %}
+{% block title %}درباره — دانشجو360{% endblock %}
+
+{% block content %}
+<div class="hero-card glass">
+    <div class="hero-icon">۳۶۰</div>
+    <h1 class="hero-title">دانشجو۳۶۰</h1>
+    <p class="hero-sub">نسخه {{ MOBILE_APP_VERSION }} — سامانه نظرسنجی دروس</p>
+</div>
+
+<div class="card glass">
+    <div class="card-title">درباره اپلیکیشن</div>
+    <p style="font-size:13px;color:var(--text-2);line-height:1.8;margin-top:8px;">
+        دانشجو۳۶۰ پلتفرم رسمی نظرسنجی دروس دانشگاه آزاد اسلامی واحد تهران شمال است.
+        این اپلیکیشن به دانشجویان اجازه می‌دهد درس‌های مورد نیاز خود را برای ترم آینده 
+        پیشنهاد دهند و در شکل‌گیری برنامه درسی مشارکت کنند.
+    </p>
+</div>
+
+<div class="card glass">
+    <div class="card-title">ویژگی‌ها</div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#a78bfa,#7c3aed);display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">📊</div>
+            <div style="font-size:12px;color:var(--text-2);">داشبورد زنده آمار نظرسنجی</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f472b6,#db2777);display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">📚</div>
+            <div style="font-size:12px;color:var(--text-2);">فهرست کامل دروس با جستجو</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#38bdf8,#0284c7);display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">📱</div>
+            <div style="font-size:12px;color:var(--text-2);">نصب روی صفحه اصلی موبایل</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#34d399,#059669);display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">🔄</div>
+            <div style="font-size:12px;color:var(--text-2);">به‌روزرسانی خودکار داده‌ها</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#d97706);display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">🌙</div>
+            <div style="font-size:12px;color:var(--text-2);">پشتیبانی آفلاین (PWA)</div>
+        </div>
+    </div>
+</div>
+
+<div class="card glass">
+    <div class="card-title">کانال‌های دسترسی</div>
+    <div style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        <div style="text-align:center;padding:12px 6px;background:var(--glass-strong);border-radius:10px;">
+            <div style="font-size:24px;">💬</div>
+            <div style="font-size:10px;color:var(--text-2);margin-top:4px;font-weight:600;">بات بله</div>
+        </div>
+        <div style="text-align:center;padding:12px 6px;background:var(--glass-strong);border-radius:10px;">
+            <div style="font-size:24px;">🌐</div>
+            <div style="font-size:10px;color:var(--text-2);margin-top:4px;font-weight:600;">مینی‌اپ</div>
+        </div>
+        <div style="text-align:center;padding:12px 6px;background:var(--glass-strong);border-radius:10px;">
+            <div style="font-size:24px;">💻</div>
+            <div style="font-size:10px;color:var(--text-2);margin-top:4px;font-weight:600;">وب‌سایت</div>
+        </div>
+    </div>
+</div>
+
+<div style="text-align:center;padding:20px 16px 40px;color:var(--text-3);font-size:11px;">
+    دانشگاه آزاد اسلامی واحد تهران شمال<br>
+    © ۱۴۰۵ — نسخه {{ MOBILE_APP_VERSION }}
+</div>
+{% endblock %}

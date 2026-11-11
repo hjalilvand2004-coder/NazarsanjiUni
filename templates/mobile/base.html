@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f0c29">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="دانشجو360">
+    <link rel="manifest" href="/app/manifest.json">
+    <link rel="apple-touch-icon" href="/app/icon/192">
+    <link rel="icon" type="image/svg+xml" href="/app/icon/192">
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/mobile/style.css?v={{ MOBILE_APP_VERSION }}">
+    <title>{% block title %}دانشجو360{% endblock %}</title>
+</head>
+<body>
+    <div class="aurora-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="grid-mesh"></div>
+    </div>
+
+    <!-- App Header -->
+    <header class="app-header glass">
+        <a href="/app" class="app-brand">
+            <div class="app-logo">۳۶۰</div>
+            <div class="app-name">
+                دانشجو۳۶۰
+                <span class="sub">{% if SURVEY_ID %}{{ SEMESTER_LABEL }}{% else %}حالت تست{% endif %}</span>
+            </div>
+        </a>
+        <button class="icon-btn" onclick="location.href='/app/about'" title="درباره">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </button>
+    </header>
+
+    <!-- Page Content -->
+    <main class="page-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="/app" class="nav-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>
+            <span>خانه</span>
+        </a>
+        <a href="/app/dashboard" class="nav-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>داشبورد</span>
+        </a>
+        <a href="/app/courses" class="nav-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <span>دروس</span>
+        </a>
+        <a href="/app/login" class="nav-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>پروفایل</span>
+        </a>
+    </nav>
+
+    <!-- PWA Install Banner -->
+    <div id="install-banner" class="install-banner" style="display:none;">
+        <div class="icon">۳۶۰</div>
+        <div class="text">
+            <strong>دانشجو۳۶۰ را نصب کنید</strong>
+            <span>برای دسترسی سریع به صفحه اصلی موبایل اضافه کنید</span>
+        </div>
+        <button onclick="installApp()">نصب</button>
+        <button class="close" onclick="hideInstallBanner()">✕</button>
+    </div>
+
+    <script src="/static/mobile/app.js?v={{ MOBILE_APP_VERSION }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

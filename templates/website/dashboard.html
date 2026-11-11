@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>داشبورد زنده | نظرسنجی دروس {{ semester }}</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='website/style.css') }}?v={{ version }}">
+</head>
+<body>
+    <div class="aurora">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="grid-mesh"></div>
+    </div>
+
+    <nav class="nav glass">
+        <div class="container nav-inner">
+            <a href="/" class="brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">سامانه نظرسنجی</span>
+                    <span class="brand-sub">{{ semester }}</span>
+                </div>
+            </a>
+            <div class="nav-links">
+                <a href="/" class="nav-link">خانه</a>
+                <a href="/dashboard" class="nav-link active">داشبورد</a>
+                <a href="/courses" class="nav-link">دروس</a>
+                <a href="/login-choice" class="nav-link" style="color:var(--accent);font-weight:700;">🔐 ورود</a>
+                <a href="/about" class="nav-link">درباره</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="dashboard-hero">
+        <div class="container">
+            <span class="section-tag">داشبورد زنده</span>
+            <h1 class="section-title">آمار لحظه‌ای نظرسنجی</h1>
+            <p class="section-desc">به‌روزرسانی خودکار هر ۳۰ ثانیه — بدون نیاز به رفرش دستی</p>
+        </div>
+    </section>
+
+    <section style="padding: 0 0 60px;">
+        <div class="container">
+            <div class="dashboard-grid">
+                <div class="stat-card glass">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+                    <div class="stat-value" id="stat-users">{{ stats.total_users }}</div>
+                    <div class="stat-label">دانشجوی ثبت‌شده</div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+                    <div class="stat-value" id="stat-requests">{{ stats.total_requests }}</div>
+                    <div class="stat-label">پیشنهاد ثبت‌شده</div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
+                    <div class="stat-value" id="stat-participants">{{ stats.participants }}</div>
+                    <div class="stat-label">شرکت‌کننده فعال</div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+                    <div class="stat-value" id="stat-courses">{{ stats.total_courses }}</div>
+                    <div class="stat-label">درس موجود</div>
+                </div>
+            </div>
+
+            <div class="chart-card glass">
+                <h3>دروس پرتقاضا (Top 10)</h3>
+                <div class="chart-wrap"><canvas id="chart-top"></canvas></div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+                <div class="chart-card glass">
+                    <h3>توزیع دروس بر اساس بخش</h3>
+                    <div class="chart-wrap"><canvas id="chart-sections"></canvas></div>
+                </div>
+                <div class="chart-card glass">
+                    <h3>روند روزانه پیشنهادات</h3>
+                    <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+                </div>
+            </div>
+
+            <div class="chart-card glass" style="margin-top:24px;">
+                <h3>جدول کامل دروس پرتقاضا</h3>
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--glass-border);">
+                            <th style="text-align:right;padding:12px 8px;color:var(--text-3);font-size:13px;">رتبه</th>
+                            <th style="text-align:right;padding:12px 8px;color:var(--text-3);font-size:13px;">نام درس</th>
+                            <th style="text-align:right;padding:12px 8px;color:var(--text-3);font-size:13px;">بخش</th>
+                            <th style="text-align:left;padding:12px 8px;color:var(--text-3);font-size:13px;">تعداد</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in stats.top_courses %}
+                        <tr style="border-bottom:1px solid var(--glass-border);">
+                            <td style="padding:12px 8px;color:var(--accent);font-weight:700;">#{{ loop.index }}</td>
+                            <td style="padding:12px 8px;color:var(--text-1);">{{ c.title }}</td>
+                            <td style="padding:12px 8px;color:var(--text-3);font-size:13px;">{{ c.section or "—" }}</td>
+                            <td style="padding:12px 8px;color:var(--text-1);font-weight:700;text-align:left;">{{ c.cnt }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>© ۱۴۰۴ — نسخه {{ version }} — سامانه نظرسنجی دروس {{ semester }}</p>
+            </div>
+        </div>
+    <div style="text-align:center;padding:12px;font-size:12px;color:var(--text-3);border-top:1px solid var(--glass-border);margin-top:20px;">طراحی و توسعه توسط <a href="https://MahAI.ir" target="_blank" style="color:var(--accent);font-weight:600;">شرکت ماه افزار هوشمند رسا</a></div>
+            </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='website/app.js') }}?v={{ version }}"></script>
+    <script>
+        refreshLiveStats();
+        setInterval(refreshLiveStats, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+{% extends "mobile/base.html" %}
+{% block title %}ورود — دانشجو360{% endblock %}
+
+{% block content %}
+<div class="hero-card glass" style="padding:28px 22px;">
+    <div class="hero-icon">🔑</div>
+    <h1 class="hero-title">ورود دانشجو</h1>
+    <p class="hero-sub">به دانشجو۳۶۰ خوش آمدید</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}">
+        <div class="alert-icon">ℹ️</div>
+        <div>{{ msg }}</div>
+    </div>
+    {% endfor %}
+{% endwith %}
+
+<div class="card glass">
+    <form method="POST" action="/login">
+        <div class="form-group">
+            <label class="form-label">شماره دانشجویی</label>
+            <input type="text" name="student_number" class="form-input" required autofocus>
+        </div>
+        <div class="form-group">
+            <label class="form-label">رمز عبور</label>
+            <input type="password" name="password" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary">ورود</button>
+    </form>
+</div>
+
+<div style="text-align:center;padding:16px;color:var(--text-3);font-size:12px;">
+    ثبت‌نام نکرده‌اید؟ 
+    <a href="/app/register" style="color:var(--accent);font-weight:600;">ثبت‌نام کنید</a>
+</div>
+
+{% if SURVEY_ID %}
+<div class="alert alert-info">
+    <div class="alert-icon">📅</div>
+    <div>ترم فعال: <strong>{{ SEMESTER_LABEL }}</strong><br>مهلت: {{ SURVEY_DEADLINE }}</div>
+</div>
+{% else %}
+<div class="alert alert-warning">
+    <div class="alert-icon">⚠️</div>
+    <div>در حال حاضر نظرسنجی فعالی وجود ندارد</div>
+</div>
+{% endif %}
+{% endblock %}

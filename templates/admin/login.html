@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ورود ادمین | سامانه نظرسنجی دروس</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('serve_admin_static', path='style.css') }}?v={{ APP_VERSION }}">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <div class="login-logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+            </div>
+            <h1 class="login-title">ورود به پنل مدیریت</h1>
+            <p class="login-sub">سامانه نظرسنجی دروس {{ SEMESTER_LABEL }}</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for cat, msg in messages %}
+                    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+                {% endfor %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('admin_login') }}">
+                <div class="form-group">
+                    <label class="form-label">نام کاربری</label>
+                    <input type="text" name="username" class="form-input" placeholder="admin" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">رمز عبور</label>
+                    <input type="password" name="password" class="form-input" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    ورود
+                </button>
+            </form>
+
+            <!-- Admin hint removed -->
+
+            <div class="login-back">
+                <a href="{{ url_for('index') }}">→ بازگشت به وب‌سایت</a>
+            </div>
+        </div>
+    </div>
+<div style="text-align:center;padding:12px;font-size:11px;color:#94a3b8;">طراحی و توسعه توسط <a href="https://MahAI.ir" target="_blank" style="color:#a78bfa;font-weight:600;">شرکت ماه افزار هوشمند رسا</a></div>
+</body>
+</html>

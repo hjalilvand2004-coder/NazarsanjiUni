@@ -1,0 +1,10 @@
+# Dependencies for Course Survey v2.1.0
+Flask>=3.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+waitress>=3.0.0
+
+# [v3.7.0] SSO/OIDC dependencies
+requests>=2.31.0
+PyJWT>=2.8.0
+cryptography>=41.0.0

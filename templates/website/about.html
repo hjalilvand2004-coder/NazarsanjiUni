@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>درباره سامانه | نظرسنجی دروس {{ semester }}</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='website/style.css') }}?v={{ version }}">
+</head>
+<body>
+    <div class="aurora">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="grid-mesh"></div>
+    </div>
+
+    <nav class="nav glass">
+        <div class="container nav-inner">
+            <a href="/" class="brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">سامانه نظرسنجی</span>
+                    <span class="brand-sub">{{ semester }}</span>
+                </div>
+            </a>
+            <div class="nav-links">
+                <a href="/" class="nav-link">خانه</a>
+                <a href="/dashboard" class="nav-link">داشبورد</a>
+                <a href="/courses" class="nav-link">دروس</a>
+                <a href="/download-app" class="nav-link">📱 دانشجو۳۶۰</a>
+                <a href="/login-choice" class="nav-link" style="color:var(--accent);font-weight:700;">🔐 ورود</a>
+                <a href="/about" class="nav-link active">درباره</a>
+            </div>
+        </div>
+    </nav>
+
+    <section style="padding: 60px 0;">
+        <div class="container" style="max-width: 800px;">
+            <div class="section-head">
+                <span class="section-tag">معرفی</span>
+                <h1 class="section-title">درباره سامانه</h1>
+            </div>
+
+            <div class="card glass" style="padding:32px;border-radius:var(--radius-xl);margin-bottom:24px;">
+                <h2 style="font-size:24px;margin-bottom:16px;color:var(--accent);">هدف سامانه</h2>
+                <p style="font-size:15px;line-height:1.9;color:var(--text-2);">
+                    این سامانه با هدف مشارکت دادن دانشجویان در فرآیند انتخاب دروس ترم
+                    <strong style="color:var(--text-1);">{{ semester }}</strong> طراحی شده است.
+                    دانشجویان می‌توانند دروس مورد نیاز خود را پیشنهاد دهند و آموزش دانشکده
+                    بر اساس آمار دقیق و شفاف، تصمیمات درسی آگاهانه‌تری اتخاذ کند.
+                    تمامی داده‌ها به‌صورت زنده و در دسترس عموم قرار می‌گیرد تا شفافیت کامل
+                    در فرآیند تصمیم‌گیری حاکم باشد.
+                </p>
+            </div>
+
+            <div class="card glass" style="padding:32px;border-radius:var(--radius-xl);margin-bottom:24px;">
+                <h2 style="font-size:24px;margin-bottom:16px;color:var(--accent);">معماری سامانه</h2>
+                <p style="font-size:15px;line-height:1.9;color:var(--text-2);">
+                    سامانه از سه بخش مجزا تشکیل شده است که همگی از یک دیتابیس مشترک SQLite استفاده می‌کنند:
+                </p>
+                <ul style="list-style:none;padding-right:0;margin-top:16px;">
+                    <li style="padding:12px 0;border-bottom:1px solid var(--glass-border);">
+                        <strong style="color:var(--accent-3);">۱. بازوی بله (bot.py):</strong>
+                        چت متنی با کیبورد برای کاربرانی که ترجیح می‌دهند از طریق گفت‌وگو پیشنهاد دهند.
+                    </li>
+                    <li style="padding:12px 0;border-bottom:1px solid var(--glass-border);">
+                        <strong style="color:var(--accent);">۲. مینی‌اپ بله (miniapp.py):</strong>
+                        رابط کاربری وب شیک داخل بله با امکانات پیشرفته شامل داشبورد، فیلتر، جستجو و نمودار.
+                    </li>
+                    <li style="padding:12px 0;">
+                        <strong style="color:var(--accent-2);">۳. وب‌سایت عمومی (website.py):</strong>
+                        صفحه فرود و داشبورد زنده برای نمایش آمار به‌صورت عمومی بدون نیاز به احراز هویت.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="card glass" style="padding:32px;border-radius:var(--radius-xl);margin-bottom:24px;">
+                <h2 style="font-size:24px;margin-bottom:16px;color:var(--accent);">امنیت</h2>
+                <p style="font-size:15px;line-height:1.9;color:var(--text-2);">
+                    تمامی درخواست‌های مینی‌اپ با امضای HMAC-SHA256 روی داده initData اعتبارسنجی می‌شود.
+                    کلید HMAC از امضای HMAC-SHA256 توکن بازو با رشته "WebAppData" ساخته می‌شود (طبق مستندات رسمی بله).
+                    دسترسی به پنل ادمین در سطح سرور کنترل می‌شود، نه فقط در رابط کاربری.
+                    ثبت مجدد پیشنهاد پس از ثبت نهایی، انتخاب بیش از حداکثر مجاز دروس، و حذف درس پس از مهلت مجاز نیست.
+                </p>
+            </div>
+
+            <div class="card glass" style="padding:32px;border-radius:var(--radius-xl);margin-bottom:24px;">
+                <h2 style="font-size:24px;margin-bottom:16px;color:var(--accent);">نسخه‌گذاری</h2>
+                <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                    <tr style="border-bottom:1px solid var(--glass-border);">
+                        <td style="padding:10px 0;color:var(--text-3);">نسخه فعلی</td>
+                        <td style="padding:10px 0;color:var(--text-1);font-weight:700;">v{{ version }}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid var(--glass-border);">
+                        <td style="padding:10px 0;color:var(--text-3);">ترم فعال</td>
+                        <td style="padding:10px 0;color:var(--text-1);">{{ semester }}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid var(--glass-border);">
+                        <td style="padding:10px 0;color:var(--text-3);">مهلت نظرسنجی</td>
+                        <td style="padding:10px 0;color:var(--warning);font-weight:700;">{{ deadline }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 0;color:var(--text-3);">سرور</td>
+                        <td style="padding:10px 0;color:var(--text-1);">188.212.96.235</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="cta-card glass" style="text-align:center;padding:40px;">
+                <h2 style="font-size:24px;margin-bottom:12px;color:var(--text-1);">سوالی دارید؟</h2>
+                <p style="color:var(--text-2);margin-bottom:20px;">
+                    از طریق بازوی بله با ادمین سامانه در تماس باشید.
+                </p>
+                <a href="/" class="btn btn-primary">بازگشت به خانه</a>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>© ۱۴۰۴ — نسخه {{ version }} — سامانه نظرسنجی دروس {{ semester }}</p>
+            </div>
+        </div>
+    <div style="text-align:center;padding:12px;font-size:12px;color:var(--text-3);border-top:1px solid var(--glass-border);margin-top:20px;">طراحی و توسعه توسط <a href="https://MahAI.ir" target="_blank" style="color:var(--accent);font-weight:600;">شرکت ماه افزار هوشمند رسا</a></div>
+            </footer>
+
+    <script src="{{ url_for('static', filename='website/app.js') }}?v={{ version }}"></script>
+</body>
+</html>

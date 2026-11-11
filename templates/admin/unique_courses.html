@@ -1,0 +1,181 @@
+{% extends "admin/base.html" %}
+{% block title %}دروس یکتا{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>دروس یکتا (پایه)</h1>
+        <div class="breadcrumb">خانه / دروس / دروس یکتا</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-modal').style.display='flex'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            افزودن درس یکتا
+        </button>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    📚 این جدول <strong>دروس پایه یکتا</strong> است که از فایل <code>CourceListYekta.xlsx</code> بارگذاری شده.
+    ادمین می‌تواند دروس را اضافه، ویرایش یا غیرفعال کند. هر درس یکتا با کد یکتا (unique_code) شناخته می‌شود.
+</div>
+
+<div class="card">
+    <form method="GET" class="search-bar">
+        <input type="text" name="q" value="{{ search }}" placeholder="🔍 جستجو بر اساس کد، عنوان یا گروه...">
+        <button type="submit" class="btn btn-ghost btn-sm">جستجو</button>
+        {% if search %}<a href="{{ url_for('admin_unique_courses') }}" class="btn btn-ghost btn-sm">پاک</a>{% endif %}
+    </form>
+
+    <p style="font-size:12px;color:var(--text-3);margin-bottom:12px;">
+        مجموع {{ courses|length }} درس یکتا
+        • فعال: {{ courses|selectattr('is_active')|list|length }}
+        • غیرفعال: {{ courses|rejectattr('is_active')|list|length }}
+    </p>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>کد یکتا</th>
+                <th>عنوان درس</th>
+                <th>گروه</th>
+                <th>ظرفیت برآوردی</th>
+                <th>وضعیت</th>
+                <th>تعداد تفکیکی</th>
+                <th>عملیات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in courses %}
+            <tr>
+                <td><strong>{{ c.unique_code }}</strong></td>
+                <td>{{ c.title }}</td>
+                <td>
+                    {% if c.course_group %}
+                    <span class="badge badge-info">{{ c.course_group }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ c.capacity_estimate or '—' }}</td>
+                <td>
+                    {% if c.is_active %}
+                    <span class="badge badge-success">فعال</span>
+                    {% else %}
+                    <span class="badge badge-warning">غیرفعال</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% set cnt = course_counts.get(c.unique_code, 0) %}
+                    {% if cnt > 0 %}
+                    <span class="badge badge-primary">{{ cnt }} درس</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="actions-cell">
+                    <button class="btn btn-ghost btn-sm" onclick="editCourse({{ c.unique_code }}, '{{ c.title|e }}', '{{ c.course_group|e }}', {{ c.capacity_estimate or 30 }}, {{ c.is_active }})"
+                            title="ویرایش">✎</button>
+                    <form method="POST" action="{{ url_for('admin_unique_course_delete', code=c.unique_code) }}" style="display:inline;"
+                          onsubmit="return confirm('حذف شود؟ (فقط دروس بدون وابستگی قابل حذف هستند)')">
+                        <button type="submit" class="btn btn-danger btn-sm" title="حذف">×</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-3);">دروسی یافت نشد.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal افزودن -->
+<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="max-width:480px;width:100%;">
+        <div class="card-header">
+            <div class="card-title">افزودن درس یکتا</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('add-modal').style.display='none'">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_unique_course_add') }}">
+            <div class="form-group">
+                <label class="form-label">کد یکتا *</label>
+                <input type="number" name="unique_code" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">عنوان درس *</label>
+                <input type="text" name="title" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">گروه</label>
+                <select name="course_group" class="form-select">
+                    <option value="تخصصی کامپیوتر">تخصصی کامپیوتر</option>
+                    <option value="ریاضی">ریاضی</option>
+                    <option value="فیزیک">فیزیک</option>
+                    <option value="برق">برق</option>
+                    <option value="مکانیک">مکانیک</option>
+                    <option value="معارف اسلامی">معارف اسلامی</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">ظرفیت برآوردی</label>
+                <input type="number" name="capacity_estimate" class="form-input" value="30">
+            </div>
+            <div class="form-group">
+                <label class="form-label">وضعیت</label>
+                <select name="is_active" class="form-select">
+                    <option value="1">فعال</option>
+                    <option value="0">غیرفعال</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">افزودن</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal ویرایش -->
+<div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="max-width:480px;width:100%;">
+        <div class="card-header">
+            <div class="card-title">ویرایش درس یکتا</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('edit-modal').style.display='none'">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_unique_course_update') }}">
+            <input type="hidden" name="unique_code" id="edit-code">
+            <div class="form-group">
+                <label class="form-label">عنوان درس</label>
+                <input type="text" name="title" id="edit-title" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">گروه</label>
+                <select name="course_group" id="edit-group" class="form-select">
+                    <option value="تخصصی کامپیوتر">تخصصی کامپیوتر</option>
+                    <option value="ریاضی">ریاضی</option>
+                    <option value="فیزیک">فیزیک</option>
+                    <option value="برق">برق</option>
+                    <option value="مکانیک">مکانیک</option>
+                    <option value="معارف اسلامی">معارف اسلامی</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">ظرفیت برآوردی</label>
+                <input type="number" name="capacity_estimate" id="edit-capacity" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">وضعیت</label>
+                <select name="is_active" id="edit-active" class="form-select">
+                    <option value="1">فعال</option>
+                    <option value="0">غیرفعال</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">ذخیره تغییرات</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function editCourse(code, title, group, capacity, isActive) {
+    document.getElementById('edit-code').value = code;
+    document.getElementById('edit-title').value = title;
+    document.getElementById('edit-group').value = group;
+    document.getElementById('edit-capacity').value = capacity;
+    document.getElementById('edit-active').value = isActive ? '1' : '0';
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+</script>
+{% endblock %}

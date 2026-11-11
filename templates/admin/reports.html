@@ -1,0 +1,182 @@
+{% extends "admin/base.html" %}
+{% block title %}گزارش‌ها و نمودارها{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>گزارش‌ها و نمودارها</h1>
+        <div class="breadcrumb">خانه / گزارش‌ها</div>
+    </div>
+    <div class="actions">
+        <a href="{{ url_for('admin_report_excel') }}" class="btn btn-primary btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            دانلود اکسل کامل
+        </a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header"><div class="card-title">۲۰ درس پرتقاضا</div></div>
+        <div class="chart-wrap chart-wrap-lg"><canvas id="topChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header"><div class="card-title">روند روزانه (۳۰ روز اخیر)</div></div>
+        <div class="chart-wrap chart-wrap-lg"><canvas id="dailyChart"></canvas></div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header"><div class="card-title">توزیع بخش‌های درسی</div></div>
+        <div class="chart-wrap"><canvas id="sectionChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header"><div class="card-title">توزیع بر اساس نوع دانشجو</div></div>
+        <div class="chart-wrap"><canvas id="typeChart"></canvas></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><div class="card-title">جدول دروس پرتقاضا</div></div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>رتبه</th>
+                <th>نام درس</th>
+                <th>بخش</th>
+                <th>سال</th>
+                <th>تعداد پیشنهاد</th>
+                <th>کاربران یکتا</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in top_courses %}
+            <tr>
+                <td><strong>#{{ loop.index }}</strong></td>
+                <td>{{ c.title }}</td>
+                <td>{{ c.section }}</td>
+                <td>{{ c.year }}</td>
+                <td><span class="badge badge-primary">{{ c.cnt }}</span></td>
+                <td>{{ c.unique_users }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-3);">داده‌ای موجود نیست.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const labels = {basic:'پایه',core:'اصلی',specialized:'تخصصی',specialized_ai:'هوش',specialized_sw:'نرم‌افزار',electives:'اختیاری'};
+const topCourses = {{ top_courses | tojson }};
+const daily = {{ daily | tojson }};
+const sections = {{ sections | tojson }};
+const types = {{ student_types | tojson }};
+
+new Chart(document.getElementById('topChart'), {
+    type: 'bar',
+    data: {
+        labels: topCourses.map(c => c.title),
+        datasets: [{
+            data: topCourses.map(c => c.cnt),
+            backgroundColor: (ctx) => {
+                const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
+                g.addColorStop(0, 'rgba(167,139,250,0.9)');
+                g.addColorStop(1, 'rgba(244,114,182,0.4)');
+                return g;
+            },
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#cbd5e1', font: { size: 9 }, maxRotation: 45 }, grid: { display: false } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+    }
+});
+
+new Chart(document.getElementById('dailyChart'), {
+    type: 'line',
+    data: {
+        labels: daily.map(d => d.day),
+        datasets: [{
+            data: daily.map(d => d.cnt),
+            borderColor: '#a78bfa',
+            backgroundColor: (ctx) => {
+                const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
+                g.addColorStop(0, 'rgba(167,139,250,0.4)');
+                g.addColorStop(1, 'rgba(167,139,250,0)');
+                return g;
+            },
+            fill: true, tension: 0.4, borderWidth: 2,
+            pointBackgroundColor: '#f472b6', pointRadius: 3
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+    }
+});
+
+// نمودار توزیع بخش‌های درسی — به جای doughnut از bar افقی استفاده می‌کنیم
+new Chart(document.getElementById('sectionChart'), {
+    type: 'bar',
+    data: {
+        labels: sections.map(s => labels[s.section] || s.section),
+        datasets: [{
+            label: 'تعداد پیشنهاد',
+            data: sections.map(s => s.cnt),
+            backgroundColor: (ctx) => {
+                const colors = ['#a78bfa', '#f472b6', '#38bdf8', '#34d399', '#fbbf24', '#f87171', '#94a3b8'];
+                return colors[ctx.dataIndex % colors.length];
+            },
+            borderRadius: 6,
+            barThickness: 'flex',
+            maxBarThickness: 30,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y',  // افقی
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: '#cbd5e1', font: { size: 12 } }, grid: { display: false } }
+        }
+    }
+});
+
+// نمودار نوع دانشجو — به جای pie از bar استفاده می‌کنیم
+new Chart(document.getElementById('typeChart'), {
+    type: 'bar',
+    data: {
+        labels: types.map(t => t.student_type),
+        datasets: [{
+            label: 'تعداد',
+            data: types.map(t => t.cnt),
+            backgroundColor: ['#a78bfa', '#f472b6'],
+            borderRadius: 8,
+            barThickness: 60,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#cbd5e1', font: { size: 13 } }, grid: { display: false } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+    }
+});
+</script>
+{% endblock %}

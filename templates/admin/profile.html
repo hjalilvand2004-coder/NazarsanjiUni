@@ -1,0 +1,92 @@
+{% extends "admin/base.html" %}
+{% block title %}پروفایل من{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>پروفایل من</h1>
+        <div class="breadcrumb">خانه / پروفایل</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">اطلاعات کاربری</div>
+        </div>
+        <form method="POST" action="{{ url_for('admin_profile') }}">
+            <div class="form-group">
+                <label class="form-label">نام کاربری</label>
+                <input type="text" class="form-input" value="{{ admin.username }}" disabled>
+            </div>
+            <div class="form-group">
+                <label class="form-label">نام کامل</label>
+                <input type="text" name="full_name" class="form-input" value="{{ admin.full_name or '' }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">ایمیل</label>
+                <input type="email" name="email" class="form-input" value="{{ admin.email or '' }}">
+            </div>
+
+            <div style="margin:20px 0;padding:16px;background:rgba(251,191,36,0.08);border:1px dashed rgba(251,191,36,0.3);border-radius:12px;">
+                <div style="font-size:13px;color:var(--warning);font-weight:700;margin-bottom:8px;">🔑 تغییر رمز عبور</div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">رمز عبور جدید (در صورت عدم تغییر، خالی بگذارید)</label>
+                    <input type="password" name="new_password" class="form-input" placeholder="••••••••">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">ذخیره تغییرات</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">اطلاعات حساب</div>
+        </div>
+        <table class="table">
+            <tr>
+                <td style="color:var(--text-3);">نقش</td>
+                <td>
+                    {% if admin.role == 'super_admin' %}
+                    <span class="badge badge-primary">سوپر ادمین</span>
+                    {% elif admin.role == 'viewer' %}
+                    <span class="badge badge-info">مشاهده‌گر</span>
+                    {% else %}
+                    <span class="badge badge-success">ادمین</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">وضعیت</td>
+                <td>
+                    {% if admin.is_active %}
+                    <span class="badge badge-success">فعال</span>
+                    {% else %}
+                    <span class="badge badge-danger">غیرفعال</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">تاریخ عضویت</td>
+                <td>{{ admin.created_at }}</td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">آخرین ورود</td>
+                <td>{{ admin.last_login or 'هرگز' }}</td>
+            </tr>
+        </table>
+
+        <div style="margin-top:20px;padding:16px;background:var(--glass-strong);border-radius:12px;">
+            <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">سطح دسترسی</div>
+            {% if admin.role == 'super_admin' %}
+            <div style="color:var(--success);font-size:13px;">✓ دسترسی کامل (شامل مدیریت ادمین‌ها)</div>
+            {% elif admin.role == 'admin' %}
+            <div style="color:var(--accent);font-size:13px;">✓ دسترسی به مدیریت دروس، کاربران و گزارش‌ها</div>
+            {% else %}
+            <div style="color:var(--accent-3);font-size:13px;">✓ فقط مشاهده</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

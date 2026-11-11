@@ -1,0 +1,133 @@
+{% extends "admin/base.html" %}
+{% block title %}تاریخچه کاربر{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>تاریخچه کاربر</h1>
+        <div class="breadcrumb">
+            <a href="{{ url_for('admin_users') }}">کاربران</a> / تاریخچه /
+            <strong>{{ user.name }}</strong>
+        </div>
+    </div>
+    <div class="actions">
+        <a href="{{ url_for('admin_users') }}" class="btn btn-ghost btn-sm">↩ بازگشت</a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header"><div class="card-title">اطلاعات کاربر</div></div>
+        <table class="table">
+            <tr>
+                <td style="color:var(--text-3);">نام</td>
+                <td><strong>{{ user.name }}</strong></td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">شماره دانشجویی</td>
+                <td>{{ user.student_number or '—' }}</td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">نوع کارشناسی</td>
+                <td>{{ user.student_type or '—' }}</td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">تلفن</td>
+                <td>{{ user.display_phone }}</td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">نقش</td>
+                <td>
+                    {% if user.role == 'admin' %}
+                    <span class="badge badge-primary">ادمین</span>
+                    {% else %}
+                    <span class="badge badge-success">دانشجو</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">کانال اولیه ورود</td>
+                <td>
+                    <span class="badge {% if user.first_channel == 'bot' %}badge-primary{% elif user.first_channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                        {{ channel_labels.get(user.first_channel, user.first_channel or 'نامشخص') }}
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">تاریخ عضویت</td>
+                <td>{{ user.created_at }}</td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">آخرین بازدید</td>
+                <td>{{ user.last_seen or '—' }}</td>
+            </tr>
+            <tr>
+                <td style="color:var(--text-3);">تعداد پیشنهادها</td>
+                <td><strong>{{ requests_count }}</strong></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><div class="card-title">تاریخچه ورود (آخرین ۵۰)</div></div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>کانال</th>
+                    <th>IP</th>
+                    <th>زمان</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in history %}
+                <tr>
+                    <td>
+                        <span class="badge {% if h.channel == 'bot' %}badge-primary{% elif h.channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                            {{ channel_labels.get(h.channel, h.channel) }}
+                        </span>
+                    </td>
+                    <td><small>{{ h.ip_address or '—' }}</small></td>
+                    <td><small>{{ h.created_at }}</small></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" style="text-align:center;color:var(--text-3);">ورودی ثبت نشده</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><div class="card-title">پیشنهادهای ثبت‌شده</div></div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>درس</th>
+                <th>بخش</th>
+                <th>واحد</th>
+                <th>کانال ثبت</th>
+                <th>زمان</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in user_requests %}
+            <tr>
+                <td>{{ r.course_title or r.course_name }}</td>
+                <td>{{ r.section or '—' }}</td>
+                <td>{{ r.credits or '—' }}</td>
+                <td>
+                    {% if r.channel %}
+                    <span class="badge {% if r.channel == 'bot' %}badge-primary{% elif r.channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                        {{ channel_labels.get(r.channel, r.channel) }}
+                    </span>
+                    {% else %}—{% endif %}
+                </td>
+                <td><small>{{ r.created_at }}</small></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="text-align:center;color:var(--text-3);">پیشنهادی ثبت نشده</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

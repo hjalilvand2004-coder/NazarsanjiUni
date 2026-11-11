@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>داشبورد دانشجو | نظرسنجی دروس {{ SEMESTER_LABEL }}</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('serve_admin_static', path='style.css') }}?v={{ APP_VERSION }}">
+    <style>
+        /* استایل‌های مودال تأیید */
+        .confirm-modal-backdrop {
+            position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.2s ease;
+        }
+        .confirm-modal-backdrop.show { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .confirm-modal {
+            background: var(--bg-1, #1a1f2e);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 28px 24px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s ease;
+        }
+        .confirm-modal h3 {
+            font-size: 18px;
+            color: var(--text-1, #e5e7eb);
+            margin-bottom: 12px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .confirm-modal p {
+            color: var(--text-2, #9ca3af);
+            font-size: 14px;
+            line-height: 1.7;
+            margin-bottom: 16px;
+        }
+        .confirm-modal .selected-list {
+            background: var(--glass-strong, rgba(255,255,255,0.04));
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid var(--glass-border);
+        }
+        .confirm-modal .selected-list .item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 0;
+            font-size: 13px;
+            color: var(--text-2);
+            border-bottom: 1px dashed var(--glass-border);
+        }
+        .confirm-modal .selected-list .item:last-child { border-bottom: none; }
+        .confirm-modal .selected-list .item .bullet {
+            width: 6px; height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .confirm-modal .btns {
+            display: flex; gap: 10px;
+        }
+        .confirm-modal .btns button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .confirm-modal .btn-confirm {
+            background: var(--accent, #3b82f6);
+            color: white;
+        }
+        .confirm-modal .btn-confirm:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .confirm-modal .btn-cancel {
+            background: var(--glass-strong, rgba(255,255,255,0.06));
+            color: var(--text-2);
+            border: 1px solid var(--glass-border);
+        }
+        .confirm-modal .btn-cancel:hover { background: rgba(255,255,255,0.1); }
+
+        /* شمارنده دروس انتخاب‌شده */
+        .selection-counter {
+            position: sticky;
+            bottom: 16px;
+            background: var(--glass-strong, rgba(30,41,59,0.92));
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 12px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .selection-counter .count-text {
+            font-size: 14px;
+            color: var(--text-1, #e5e7eb);
+            font-weight: 600;
+        }
+        .selection-counter .count-num {
+            font-size: 18px;
+            color: var(--accent, #3b82f6);
+            font-weight: 700;
+            margin: 0 4px;
+        }
+        .selection-counter .count-num.full { color: var(--success, #10b981); }
+        .selection-counter .count-num.over { color: var(--danger, #ef4444); }
+        .selection-counter .exempt-text {
+            font-size: 11px;
+            color: var(--text-3, #6b7280);
+            margin-top: 2px;
+        }
+
+        /* toast برای هشدارهای موقت */
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(239, 68, 68, 0.95);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 30px rgba(239,68,68,0.4);
+            z-index: 10000;
+            display: none;
+            animation: slideUp 0.3s ease;
+        }
+        .toast.show { display: block; }
+
+        /* برجسته‌سازی درس‌های مستثنا */
+        .course-card.exempt {
+            border-color: rgba(16, 185, 129, 0.4) !important;
+            background: rgba(16, 185, 129, 0.08) !important;
+        }
+        .course-card.exempt::after {
+            content: ' بدون محدودیت';
+            display: inline-block;
+            font-size: 10px;
+            color: var(--success, #10b981);
+            background: rgba(16, 185, 129, 0.15);
+            padding: 2px 6px;
+            border-radius: 6px;
+            margin-right: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="aurora">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="grid-mesh"></div>
+    </div>
+
+    <nav class="nav glass">
+        <div class="container nav-inner">
+            <a href="{{ url_for('index') }}" class="brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">سامانه نظرسنجی</span>
+                    <span class="brand-sub">{{ SEMESTER_LABEL }}</span>
+                </div>
+            </a>
+            <div class="nav-links">
+                <a href="{{ url_for('index') }}" class="nav-link">خانه</a>
+                <a href="{{ url_for('dashboard') }}" class="nav-link">داشبورد</a>
+                <a href="{{ url_for('courses') }}" class="nav-link">دروس</a>
+                <a href="{{ url_for('student_dashboard') }}" class="nav-link active">پنل من</a>
+                {% if is_admin %}
+                <a href="{{ url_for('admin_index') }}" class="nav-link" style="color:var(--accent-2);">پنل ادمین</a>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('student_logout') }}" class="btn btn-ghost btn-sm">خروج</a>
+        </div>
+    </nav>
+
+    <section style="padding: 40px 0;">
+        <div class="container" style="max-width:900px;">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for cat, msg in messages %}
+                    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+                {% endfor %}
+            {% endwith %}
+
+            <div class="card glass" style="padding:30px;border-radius:24px;margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                    <div>
+                        <h1 style="font-size:24px;color:var(--text-1);margin-bottom:6px;">سلام {{ user.name }} 👋</h1>
+                        <p style="color:var(--text-3);font-size:14px;">نظرسنجی فعال: <strong style="color:var(--accent);">{{ survey.name }}</strong> — مهلت: {{ survey.deadline }}</p>
+                    </div>
+                    <div>
+                        <span class="badge badge-info">شماره دانشجویی: {{ user.student_number }}</span>
+                        <span class="badge badge-primary">{{ user.student_type }}</span>
+                    </div>
+                </div>
+            </div>
+
+            {% if not survey.id %}
+            <div class="alert alert-warning">
+                ⚠️ در حال حاضر هیچ نظرسنجی فعالی وجود ندارد. بعداً مراجعه کنید.
+            </div>
+            {% elif has_submitted %}
+            <div class="card glass" style="padding:30px;background:linear-gradient(135deg,rgba(52,211,153,0.18),rgba(56,189,248,0.12));border-color:rgba(52,211,153,0.4);">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div style="font-size:48px;">✅</div>
+                    <div>
+                        <h3 style="color:var(--success);font-size:18px;">ثبت نهایی شد</h3>
+                        <p style="color:var(--text-2);font-size:13px;margin-top:4px;">
+                            شما برای نظرسنجی {{ survey.name }} پیشنهاد خود را ثبت کرده‌اید.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card glass" style="padding:24px;border-radius:20px;">
+                <h2 style="font-size:18px;margin-bottom:16px;color:var(--text-1);">انتخاب دروس</h2>
+                <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">
+                    حداکثر <strong style="color:var(--accent);">{{ max_courses }} درس</strong> می‌توانید انتخاب کنید (به جز کارآموزی و پروژه).
+                    پس از ثبت نهایی، امکان تغییر وجود ندارد.
+                </p>
+                <form method="POST" action="{{ url_for('student_submit_courses') }}" id="surveyForm">
+                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+                        {% for c in available_courses %}
+                        <label class="course-card" data-title="{{ c.course_title }}"
+                               style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--glass-strong);border-radius:12px;cursor:pointer;border:1px solid var(--glass-border);">
+                            <input type="checkbox" name="course_ids" value="{{ c.id }}"
+                                   class="course-checkbox"
+                                   data-course-title="{{ c.course_title }}"
+                                   style="margin-top:4px;accent-color:var(--accent);">
+                            <div>
+                                <div style="font-size:14px;font-weight:600;color:var(--text-1);">{{ c.course_title }}</div>
+                                <div style="font-size:11px;color:var(--text-3);margin-top:4px;">
+                                    {{ c.section }} {% if c.credits %} • {{ c.credits }} واحد{% endif %}
+                                </div>
+                            </div>
+                        </label>
+                        {% else %}
+                        <p style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:30px;">دروسی برای نمایش وجود ندارد.</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="selection-counter" id="selectionCounter" style="display:none;">
+                        <div>
+                            <div class="count-text">
+                                تعداد دروس انتخاب‌شده:
+                                <span class="count-num" id="selectedCount">0</span>
+                                از {{ max_courses }}
+                            </div>
+                            <div class="exempt-text" id="exemptInfo"></div>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-lg" id="confirmSubmitBtn"
+                                style="min-width:160px;">
+                            ثبت نهایی پیشنهادها
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+
+            {% if my_requests %}
+            <div class="card glass" style="padding:24px;border-radius:20px;margin-top:20px;">
+                <h2 style="font-size:18px;margin-bottom:16px;color:var(--text-1);">پیشنهادهای ثبت‌شده من</h2>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>درس</th>
+                            <th>بخش</th>
+                            <th>واحد</th>
+                            <th>زمان ثبت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in my_requests %}
+                        <tr>
+                            <td>{{ r.course_title or r.course_name }}</td>
+                            <td>{{ r.section or '—' }}</td>
+                            <td>{{ r.credits or '—' }}</td>
+                            <td><small>{{ r.created_at[:16] if r.created_at else '—' }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- مودال تأیید ثبت نهایی -->
+    <div class="confirm-modal-backdrop" id="confirmBackdrop">
+        <div class="confirm-modal">
+            <h3>🔍 تأیید ثبت نهایی پیشنهادها</h3>
+            <p>شما دروس زیر را برای نظرسنجی انتخاب کرده‌اید. آیا از ثبت نهایی این دروس مطمئن هستید؟</p>
+            <div class="selected-list" id="selectedList"></div>
+            <div class="btns">
+                <button type="button" class="btn-cancel" id="cancelBtn">انصراف</button>
+                <button type="button" class="btn-confirm" id="finalSubmitBtn">بله، ثبت نهایی شود</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast برای هشدارهای موقت -->
+    <div class="toast" id="toast"></div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>© ۱۴۰۵ — نسخه {{ APP_VERSION }} — سامانه نظرسنجی دروس {{ SEMESTER_LABEL }}</p>
+            </div>
+        </div>
+    <div style="text-align:center;padding:12px;font-size:12px;color:var(--text-3);border-top:1px solid var(--glass-border);margin-top:20px;">طراحی و توسعه توسط <a href="https://MahAI.ir" target="_blank" style="color:var(--accent);font-weight:600;">شرکت ماه افزار هوشمند رسا</a></div>
+            </footer>
+
+<script>
+(function() {
+    // ===== [v3.6.1] محدودیت انتخاب ۵ درس + مودال تأیید =====
+
+    var MAX_COURSES = {{ max_courses }};
+    // درس‌هایی که در عنوانشان این کلمات باشد از محدودیت ۵ تایی مستثنی هستند
+    var EXEMPT_KEYWORDS = ['کارآموزی', 'پروژه'];
+
+    var form = document.getElementById('surveyForm');
+    if (!form) return;
+
+    var checkboxes = document.querySelectorAll('.course-checkbox');
+    var cards = document.querySelectorAll('.course-card');
+    var counter = document.getElementById('selectionCounter');
+    var countNum = document.getElementById('selectedCount');
+    var exemptInfo = document.getElementById('exemptInfo');
+    var backdrop = document.getElementById('confirmBackdrop');
+    var selectedList = document.getElementById('selectedList');
+    var cancelBtn = document.getElementById('cancelBtn');
+    var finalSubmitBtn = document.getElementById('finalSubmitBtn');
+    var confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
+    var toast = document.getElementById('toast');
+
+    // برچسب‌گذاری کارت‌های مستثنا (کارآموزی/پروژه)
+    function isExempt(title) {
+        if (!title) return false;
+        return EXEMPT_KEYWORDS.some(function(kw){ return title.indexOf(kw) !== -1; });
+    }
+
+    cards.forEach(function(card) {
+        var title = card.getAttribute('data-title') || '';
+        if (isExempt(title)) {
+            card.classList.add('exempt');
+            // اضافه کردن نشان به‌صورت جداگانه برای وضوح بهتر
+            var exemptBadge = document.createElement('span');
+            exemptBadge.style.cssText = 'display:inline-block;font-size:10px;color:var(--success, #10b981);background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:6px;margin-right:6px;margin-top:4px;';
+            exemptBadge.textContent = 'بدون محدودیت';
+            var innerDiv = card.querySelector('div');
+            if (innerDiv) innerDiv.appendChild(exemptBadge);
+        }
+    });
+
+    function getSelected() {
+        return Array.prototype.filter.call(checkboxes, function(cb){ return cb.checked; });
+    }
+
+    function getExemptSelected() {
+        return getSelected().filter(function(cb) {
+            return isExempt(cb.getAttribute('data-course-title'));
+        });
+    }
+
+    function getNonExemptSelected() {
+        return getSelected().filter(function(cb) {
+            return !isExempt(cb.getAttribute('data-course-title'));
+        });
+    }
+
+    function showToast(msg, isWarn) {
+        toast.textContent = msg;
+        toast.style.background = isWarn
+            ? 'rgba(239, 68, 68, 0.95)'
+            : 'rgba(16, 185, 129, 0.95)';
+        toast.classList.add('show');
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(function() {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    function updateCounter() {
+        var selected = getSelected();
+        var nonExempt = getNonExemptSelected();
+        var exempt = getExemptSelected();
+
+        if (selected.length === 0) {
+            counter.style.display = 'none';
+            return;
+        }
+        counter.style.display = 'flex';
+
+        countNum.textContent = nonExempt.length;
+        countNum.className = 'count-num';
+        if (nonExempt.length >= MAX_COURSES) {
+            countNum.classList.add('full');
+        }
+
+        // اطلاعات استثنا
+        if (exempt.length > 0) {
+            exemptInfo.textContent = '(' + exempt.length + ' درس کارآموزی/پروژه بدون محدودیت)';
+        } else {
+            exemptInfo.textContent = '';
+        }
+    }
+
+    // جلوگیری از انتخاب بیش از ۵ درس عادی
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', function(e) {
+            var title = cb.getAttribute('data-course-title') || '';
+            if (cb.checked && !isExempt(title)) {
+                var nonExemptCount = getNonExemptSelected().length;
+                if (nonExemptCount > MAX_COURSES) {
+                    // جلوگیری از انتخاب
+                    cb.checked = false;
+                    e.preventDefault();
+                    showToast('⚠️ بیش از ' + MAX_COURSES + ' درس نمی‌توانید انتخاب کنید. (کارآموزی و پروژه در این محدودیت حساب نمی‌شوند)', true);
+                    return false;
+                }
+            }
+            updateCounter();
+        });
+    });
+
+    // باز کردن مودال تأیید
+    confirmSubmitBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var selected = getSelected();
+        if (selected.length === 0) {
+            showToast('حداقل یک درس انتخاب کنید.', true);
+            return;
+        }
+
+        // ساخت لیست دروس انتخاب‌شده
+        selectedList.innerHTML = '';
+        selected.forEach(function(cb) {
+            var title = cb.getAttribute('data-course-title') || '';
+            var card = cb.closest('.course-card');
+            var section = '';
+            var credits = '';
+            if (card) {
+                var divs = card.querySelectorAll('div');
+                if (divs.length > 1) {
+                    var infoText = divs[divs.length - 1].textContent.trim();
+                    section = infoText;
+                }
+            }
+
+            var item = document.createElement('div');
+            item.className = 'item';
+
+            var bullet = document.createElement('span');
+            bullet.className = 'bullet';
+            if (isExempt(title)) {
+                bullet.style.background = 'var(--success, #10b981)';
+            }
+
+            var text = document.createElement('span');
+            text.innerHTML = '<strong>' + title + '</strong>'
+                + (section ? ' <span style="color:var(--text-3);font-size:11px;">(' + section + ')</span>' : '')
+                + (isExempt(title) ? ' <span style="color:var(--success,#10b981);font-size:10px;">[بدون محدودیت]</span>' : '');
+
+            item.appendChild(bullet);
+            item.appendChild(text);
+            selectedList.appendChild(item);
+        });
+
+        // افزودن خلاصه تعداد
+        var summary = document.createElement('div');
+        summary.style.cssText = 'padding-top:10px;margin-top:8px;border-top:1px dashed var(--glass-border);font-size:12px;color:var(--text-3);';
+        var nonExemptCount = getNonExemptSelected().length;
+        var exemptCount = getExemptSelected().length;
+        summary.textContent = 'مجموع: ' + selected.length + ' درس'
+            + (exemptCount > 0 ? ' (' + nonExemptCount + ' عادی + ' + exemptCount + ' کارآموزی/پروژه)' : '');
+        selectedList.appendChild(summary);
+
+        backdrop.classList.add('show');
+    });
+
+    // بستن مودال
+    cancelBtn.addEventListener('click', function() {
+        backdrop.classList.remove('show');
+    });
+    backdrop.addEventListener('click', function(e) {
+        if (e.target === backdrop) backdrop.classList.remove('show');
+    });
+
+    // ثبت نهایی پس از تأیید
+    finalSubmitBtn.addEventListener('click', function() {
+        backdrop.classList.remove('show');
+        // ارسال فرم
+        form.submit();
+    });
+
+    // Esc برای بستن مودال
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && backdrop.classList.contains('show')) {
+            backdrop.classList.remove('show');
+        }
+    });
+
+    // به‌روزرسانی اولیه
+    updateCounter();
+})();
+</script>
+</body>
+</html>

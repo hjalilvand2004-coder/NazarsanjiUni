@@ -1,0 +1,129 @@
+{% extends "admin/base.html" %}
+{% block title %}تاریخچه ورودها{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>تاریخچه ورود کاربران</h1>
+        <div class="breadcrumb">خانه / مدیریت / تاریخچه ورود</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">آمار کانال‌های ورود</div>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>کانال</th>
+                    <th>کاربران یکتا</th>
+                    <th>کل ورودها</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in channel_stats %}
+                <tr>
+                    <td>
+                        <span class="badge {% if c.channel == 'bot' %}badge-primary{% elif c.channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                            {{ channel_labels.get(c.channel, c.channel) }}
+                        </span>
+                    </td>
+                    <td><strong>{{ c.user_count }}</strong></td>
+                    <td>{{ c.login_count }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" style="text-align:center;color:var(--text-3);">داده‌ای موجود نیست</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">روند روزانه ورود (۱۴ روز)</div>
+        </div>
+        <div class="chart-wrap chart-wrap-sm"><canvas id="loginTimelineChart"></canvas></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">آخرین ورودها</div>
+        <span style="font-size:12px;color:var(--text-3);">نمایش {{ logins|length }} از {{ total }} ورود</span>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>کاربر</th>
+                <th>شماره دانشجویی</th>
+                <th>کانال</th>
+                <th>IP</th>
+                <th>زمان</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in logins %}
+            <tr>
+                <td>{{ l.id }}</td>
+                <td>{{ l.name or '—' }}</td>
+                <td>{{ l.student_number or '—' }}</td>
+                <td>
+                    <span class="badge {% if l.channel == 'bot' %}badge-primary{% elif l.channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                        {{ channel_labels.get(l.channel, l.channel) }}
+                    </span>
+                </td>
+                <td><small>{{ l.ip_address or '—' }}</small></td>
+                <td><small>{{ l.created_at }}</small></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-3);">ورودی ثبت نشده است.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}<a href="?page={{ page - 1 }}">قبلی</a>{% endif %}
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}<span class="current">{{ p }}</span>
+            {% else %}<a href="?page={{ p }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page < total_pages %}<a href="?page={{ page + 1 }}">بعدی</a>{% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const timeline = {{ timeline | tojson }};
+// تجمیع بر اساس روز
+const days = {};
+timeline.forEach(t => {
+    if (!days[t.day]) days[t.day] = {bot: 0, miniapp: 0, website: 0};
+    days[t.day][t.channel] = (days[t.day][t.channel] || 0) + t.cnt;
+});
+const labels = Object.keys(days).sort();
+new Chart(document.getElementById('loginTimelineChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [
+            {label: 'بات', data: labels.map(d => days[d].bot || 0), backgroundColor: '#a78bfa', borderRadius: 4},
+            {label: 'مینی‌اپ', data: labels.map(d => days[d].miniapp || 0), backgroundColor: '#38bdf8', borderRadius: 4},
+            {label: 'وب‌سایت', data: labels.map(d => days[d].website || 0), backgroundColor: '#34d399', borderRadius: 4}
+        ]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+            x: {stacked: true, ticks: {color: '#94a3b8', font: {size: 9}}, grid: {display: false}},
+            y: {stacked: true, ticks: {color: '#94a3b8'}, grid: {color: 'rgba(255,255,255,0.05)'}}
+        },
+        plugins: {legend: {position: 'bottom', labels: {color: '#cbd5e1', font: {size: 11}, padding: 10}}}
+    }
+});
+</script>
+{% endblock %}

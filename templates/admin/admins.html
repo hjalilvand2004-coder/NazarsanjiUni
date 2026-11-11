@@ -1,0 +1,112 @@
+{% extends "admin/base.html" %}
+{% block title %}مدیریت ادمین‌ها{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>مدیریت ادمین‌ها</h1>
+        <div class="breadcrumb">خانه / سیستم / مدیران</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-modal').style.display='flex'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            افزودن ادمین
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <p style="font-size:12px;color:var(--text-3);margin-bottom:12px;">مجموع {{ admins|length }} ادمین</p>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>نام کاربری</th>
+                <th>نام کامل</th>
+                <th>ایمیل</th>
+                <th>نقش</th>
+                <th>وضعیت</th>
+                <th>آخرین ورود</th>
+                <th>تاریخ ایجاد</th>
+                <th>عملیات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in admins %}
+            <tr>
+                <td>{{ a.id }}</td>
+                <td><strong>{{ a.username }}</strong></td>
+                <td>{{ a.full_name or '—' }}</td>
+                <td>{{ a.email or '—' }}</td>
+                <td>
+                    {% if a.role == 'super_admin' %}
+                    <span class="badge badge-primary">سوپر ادمین</span>
+                    {% elif a.role == 'viewer' %}
+                    <span class="badge badge-info">مشاهده‌گر</span>
+                    {% else %}
+                    <span class="badge badge-success">ادمین</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if a.is_active %}
+                    <span class="badge badge-success">فعال</span>
+                    {% else %}
+                    <span class="badge badge-danger">غیرفعال</span>
+                    {% endif %}
+                </td>
+                <td><small>{{ a.last_login[:16] if a.last_login else 'هرگز' }}</small></td>
+                <td><small>{{ a.created_at[:16] if a.created_at else '—' }}</small></td>
+                <td class="actions-cell">
+                    <form method="POST" action="{{ url_for('admin_admin_toggle', admin_id=a.id) }}" style="display:inline;">
+                        <button type="submit" class="btn btn-ghost btn-sm" title="تغییر وضعیت" onclick="return confirm('وضعیت تغییر کند؟')">
+                            {% if a.is_active %}🔒{% else %}🔓{% endif %}
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin_admin_delete', admin_id=a.id) }}" style="display:inline;"
+                          onsubmit="return confirm('ادمین حذف شود؟')">
+                        <button type="submit" class="btn btn-danger btn-sm" title="حذف">×</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal افزودن ادمین -->
+<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="max-width:480px;width:100%;">
+        <div class="card-header">
+            <div class="card-title">افزودن ادمین جدید</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('add-modal').style.display='none'">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_admin_add') }}">
+            <div class="form-group">
+                <label class="form-label">نام کاربری *</label>
+                <input type="text" name="username" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">رمز عبور *</label>
+                <input type="password" name="password" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">نام کامل</label>
+                <input type="text" name="full_name" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">ایمیل</label>
+                <input type="email" name="email" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">نقش</label>
+                <select name="role" class="form-select">
+                    <option value="admin">ادمین</option>
+                    <option value="super_admin">سوپر ادمین</option>
+                    <option value="viewer">مشاهده‌گر</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">افزودن ادمین</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

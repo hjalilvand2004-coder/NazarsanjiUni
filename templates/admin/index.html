@@ -1,0 +1,267 @@
+{% extends "admin/base.html" %}
+{% block title %}داشبورد{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>داشبورد مدیریت</h1>
+        <div class="breadcrumb">
+            خانه / داشبورد
+            {% if survey and survey.id %}
+            • نظرسنجی فعال: <strong style="color:var(--accent);">{{ survey.name }}</strong>
+            {% else %}
+            • <span style="color:var(--warning);">⚠️ نظرسنجی فعالی وجود ندارد</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="actions">
+        <a href="{{ url_for('admin_surveys') }}" class="btn btn-ghost btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            مدیریت نظرسنجی‌ها
+        </a>
+        <a href="{{ url_for('admin_report_excel') }}" class="btn btn-ghost btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            دانلود اکسل
+        </a>
+    </div>
+</div>
+
+{% if not survey or not survey.id %}
+<div class="alert alert-warning" style="font-size:15px;padding:20px;">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="font-size:36px;">⚠️</div>
+        <div style="flex:1;min-width:250px;">
+            <strong style="display:block;font-size:16px;margin-bottom:4px;">هیچ نظرسنجی فعالی وجود ندارد!</strong>
+            <span style="font-size:13px;">برای شروع کار سامانه، یک نظرسنجی ایجاد کنید و آن را فعال نمایید. تا زمانی که نظرسنجی فعال نشود، دانشجویان نمی‌توانند پیشنهاد ثبت کنند.</span>
+        </div>
+        <a href="{{ url_for('admin_surveys') }}" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            ایجاد نظرسنجی
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+        <div class="stat-label">کل کاربران</div>
+        <div class="stat-value">{{ stats.total_users }}</div>
+        <div class="stat-delta">+{{ stats.today_requests }} پیشنهاد امروز</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+        <div class="stat-label">کل پیشنهادات</div>
+        <div class="stat-value">{{ stats.total_requests }}</div>
+        <div class="stat-delta">{{ stats.participants }} شرکت‌کننده</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        <div class="stat-label">دروس فعال</div>
+        <div class="stat-value">{{ stats.total_courses }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></div>
+        <div class="stat-label">کاربران مسدود</div>
+        <div class="stat-value" style="color:var(--danger);background:none;-webkit-text-fill-color:var(--danger);">{{ stats.blocked_users }}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">دروس پرتقاضا (۱۰ درس)</div>
+        </div>
+        <div class="chart-wrap chart-wrap-sm"><canvas id="topChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">روند روزانه پیشنهادات (۱۴ روز اخیر)</div>
+        </div>
+        <div class="chart-wrap chart-wrap-sm"><canvas id="dailyChart"></canvas></div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">آمار ورود بر اساس کانال</div>
+        </div>
+        <div class="chart-wrap chart-wrap-sm"><canvas id="channelChart"></canvas></div>
+        <table class="table" style="margin-top:12px;">
+            <thead>
+                <tr>
+                    <th>کانال</th>
+                    <th>کاربران یکتا</th>
+                    <th>کل ورودها</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in channel_stats %}
+                <tr>
+                    <td>
+                        <span class="badge {% if c.channel == 'bot' %}badge-primary{% elif c.channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                            {{ channel_labels.get(c.channel, c.channel) }}
+                        </span>
+                    </td>
+                    <td>{{ c.user_count }}</td>
+                    <td>{{ c.login_count }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" style="text-align:center;color:var(--text-3);">داده‌ای موجود نیست</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">آخرین ورودها</div>
+            <a href="{{ url_for('admin_login_history') }}" class="btn btn-ghost btn-sm">همه</a>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>کاربر</th>
+                    <th>کانال</th>
+                    <th>زمان</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in recent_logins %}
+                <tr>
+                    <td>{{ l.name or '—' }}<br><small style="color:var(--text-3);">{{ l.student_number or '—' }}</small></td>
+                    <td>
+                        <span class="badge {% if l.channel == 'bot' %}badge-primary{% elif l.channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                            {{ channel_labels.get(l.channel, l.channel) }}
+                        </span>
+                    </td>
+                    <td><small>{{ l.created_at[:16] if l.created_at else '—' }}</small></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" style="text-align:center;color:var(--text-3);">ورودی ثبت نشده</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">آخرین فعالیت‌ها</div>
+        <a href="{{ url_for('admin_reports') }}" class="btn btn-ghost btn-sm">گزارش کامل</a>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>دانشجو</th>
+                <th>درس</th>
+                <th>کانال</th>
+                <th>زمان</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in recent %}
+            <tr>
+                <td>{{ a.name }}<br><small style="color:var(--text-3);">{{ a.student_number }}</small></td>
+                <td>{{ a.course_title or '—' }}</td>
+                <td>
+                    {% if a.channel %}
+                    <span class="badge {% if a.channel == 'bot' %}badge-primary{% elif a.channel == 'miniapp' %}badge-info{% else %}badge-success{% endif %}">
+                        {{ channel_labels.get(a.channel, a.channel) }}
+                    </span>
+                    {% else %}—{% endif %}
+                </td>
+                <td><small>{{ a.created_at }}</small></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-3);">فعالیتی ثبت نشده است.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const sectionsLabel = {basic:'پایه',core:'اصلی',specialized:'تخصصی',specialized_ai:'هوش',specialized_sw:'نرم‌افزار',electives:'اختیاری'};
+const topData = {{ top_courses | tojson }};
+const dailyData = {{ daily | tojson }};
+const channelData = {{ channel_stats | tojson }};
+
+new Chart(document.getElementById('topChart'), {
+    type: 'bar',
+    data: {
+        labels: topData.map(c => c.title),
+        datasets: [{
+            data: topData.map(c => c.cnt),
+            backgroundColor: (ctx) => {
+                const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200);
+                g.addColorStop(0, 'rgba(167,139,250,0.9)');
+                g.addColorStop(1, 'rgba(244,114,182,0.5)');
+                return g;
+            },
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#cbd5e1', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+    }
+});
+
+new Chart(document.getElementById('dailyChart'), {
+    type: 'line',
+    data: {
+        labels: dailyData.map(d => d.day),
+        datasets: [{
+            data: dailyData.map(d => d.cnt),
+            borderColor: '#a78bfa',
+            backgroundColor: (ctx) => {
+                const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200);
+                g.addColorStop(0, 'rgba(167,139,250,0.4)');
+                g.addColorStop(1, 'rgba(167,139,250,0)');
+                return g;
+            },
+            fill: true, tension: 0.4, borderWidth: 2,
+            pointBackgroundColor: '#f472b6', pointRadius: 3
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+    }
+});
+
+// نمودار کانال‌های ورود — bar افقی به جای doughnut
+new Chart(document.getElementById('channelChart'), {
+    type: 'bar',
+    data: {
+        labels: channelData.map(c => c.channel === 'bot' ? 'بات بله' : (c.channel === 'miniapp' ? 'مینی‌اپ' : (c.channel === 'website' ? 'وب‌سایت' : c.channel))),
+        datasets: [{
+            label: 'کاربران یکتا',
+            data: channelData.map(c => c.user_count),
+            backgroundColor: ['#a78bfa', '#38bdf8', '#34d399'],
+            borderRadius: 8,
+            barThickness: 40,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: '#cbd5e1', font: { size: 12 } }, grid: { display: false } }
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,91 @@
+# ==========================================================
+# .gitignore — نسخه نهایی v3.8.0
+# ==========================================================
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Virtual envs
+venv/
+.venv/
+env/
+ENV/
+
+# Database (محل ذخیره داده‌های تولید — نباید push شود)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/test_copy.db
+data/*.sqlite3
+data/response_reset_backups/
+data/downloads/*.apk
+data/bankold/
+
+# Backups and patches
+*.bak
+*.bak-*
+patch_backups/
+miniapp.py.bak-*
+
+# Cloudflared and large binaries (در صورت نیاز به‌صورت جداگانه پیکربندی شود)
+cloudflared.exe
+*.exe
+
+# Build outputs
+build_apk_output/
+app-source/build/
+app-source/app/build/
+*.apk
+*.aab
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# OS files
+*.log
+.pinggy*
+.freebuff/
+identifier.sqlite
+.env
+.env.local
+
+# Mirror files (تنظیمات SSO و لینک‌های کاربری — نباید push شوند)
+app_settings.json
+sso_links.json
+
+# Cache and temp
+.cache/
+.cache
+*.cache
+.pytest_cache/
+.coverage
+htmlcov/
+tox.ini
+
+# Secrets
+secrets/
+*.pem
+*.key
+*.cert
+
+# Documentation builds
+site/
+_build/
+
+# Misc
+*.tmp
+*.temp
+~$*
