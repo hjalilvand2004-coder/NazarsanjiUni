@@ -30,14 +30,14 @@
         }
         .login-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 24px;
-            max-width: 900px;
+            max-width: 1100px;
             margin: 0 auto;
             padding: 0 24px;
         }
         .login-card {
-            padding: 36px 28px;
+            padding: 32px 24px;
             text-align: center;
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
@@ -63,12 +63,13 @@
             background: var(--card-accent);
         }
         .login-card.student::before { background: linear-gradient(90deg, #a78bfa, #f472b6); }
+        .login-card.instructor::before { background: linear-gradient(90deg, #10b981, #059669); }
         .login-card.admin::before { background: linear-gradient(90deg, #fbbf24, #d97706); }
         .login-card.mobile::before { background: linear-gradient(90deg, #38bdf8, #0284c7); }
         .login-card-icon {
-            width: 72px; height: 72px;
-            margin: 0 auto 20px;
-            border-radius: 22px;
+            width: 64px; height: 64px;
+            margin: 0 auto 18px;
+            border-radius: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -78,36 +79,43 @@
         .login-card.student .login-card-icon {
             background: linear-gradient(135deg, #a78bfa, #7c3aed);
         }
+        .login-card.instructor .login-card-icon {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
         .login-card.admin .login-card-icon {
             background: linear-gradient(135deg, #fbbf24, #d97706);
         }
         .login-card.mobile .login-card-icon {
             background: linear-gradient(135deg, #38bdf8, #0284c7);
         }
-        .login-card-icon svg { width: 36px; height: 36px; }
+        .login-card-icon svg { width: 32px; height: 32px; }
         .login-card h3 {
-            font-size: 20px;
+            font-size: 18px;
             margin-bottom: 8px;
             color: var(--text-1);
         }
         .login-card p {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-3);
             line-height: 1.6;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
         .login-card .btn-go {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 22px;
+            padding: 10px 20px;
             border-radius: var(--radius-md);
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             transition: var(--transition);
         }
         .login-card.student .btn-go {
             background: linear-gradient(135deg, #a78bfa, #7c3aed);
+            color: white;
+        }
+        .login-card.instructor .btn-go {
+            background: linear-gradient(135deg, #10b981, #059669);
             color: white;
         }
         .login-card.admin .btn-go {
@@ -203,6 +211,22 @@
                 </span>
             </a>
 
+            <!-- ورود استاد -->
+            <a href="/instructor/login" class="login-card instructor">
+                <div class="login-card-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                    </svg>
+                </div>
+                <h3>ورود استاد</h3>
+                <p>برای ثبت مطلوبیت‌های تدریس و زمان‌بندی و مشاهده گزارش‌ها وارد شوید</p>
+                <span class="btn-go">
+                    ورود استاد
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </span>
+            </a>
+
             <!-- ورود ادمین -->
             <a href="/admin/login" class="login-card admin">
                 <div class="login-card-icon">
@@ -240,6 +264,7 @@
         <h4>یا لینک‌های سریع:</h4>
         <div class="quick-links-grid">
             <a href="/register" class="quick-link">📝 ثبت‌نام دانشجوی جدید</a>
+            <a href="/instructor/register" class="quick-link">👨‍🏫 ثبت‌نام استاد جدید</a>
             <a href="/dashboard" class="quick-link">📊 داشبورد زنده</a>
             <a href="/courses" class="quick-link">📚 فهرست دروس</a>
             <a href="/download-app" class="quick-link">📱 دانلود موبایل اپ</a>
@@ -250,7 +275,7 @@
     {% if not SURVEY_ID %}
     <div style="max-width:700px;margin:0 auto 40px;padding:16px;">
         <div class="alert alert-warning">
-            <strong>⚠️ توجه:</strong> در حال حاضر نظرسنجی فعالی وجود ندارد. 
+            <strong>⚠️ توجه:</strong> در حال حاضر نظرسنجی فعالی وجود ندارد.
             دانشجویان می‌توانند ثبت‌نام کنند ولی برای ثبت پیشنهاد باید ادمین یک نظرسنجی فعال کند.
         </div>
     </div>
@@ -262,7 +287,7 @@
                 <p>© ۱۴۰۵ — نسخه {{ APP_VERSION }} — سامانه نظرسنجی دروس {{ SEMESTER_LABEL }}</p>
             </div>
         </div>
-    <div style="text-align:center;padding:12px;font-size:12px;color:var(--text-3);border-top:1px solid var(--glass-border);margin-top:20px;">Ø·Ø±Ø§Ø­Û Ù ØªÙØ³Ø¹Ù ØªÙØ³Ø· <a href="https://MahAI.ir" target="_blank" style="color:var(--accent);font-weight:600;">Ø´Ø±Ú©Øª ÙØ§Ù Ø§ÙØ²Ø§Ø± ÙÙØ´ÙÙØ¯ Ø±Ø³Ø§</a></div>
+    <div style="text-align:center;padding:12px;font-size:12px;color:var(--text-3);border-top:1px solid var(--glass-border);margin-top:20px;">طراحی و توسعه توسط <a href="https://MahAI.ir" target="_blank" style="color:var(--accent);font-weight:600;">شرکت ماه افزار هوشمند رسا</a></div>
             </footer>
 </body>
 </html>

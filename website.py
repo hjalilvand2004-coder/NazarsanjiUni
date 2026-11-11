@@ -186,6 +186,37 @@ def super_admin_required(f):
     return decorated
 
 
+def admin_or_instructor_required(f):
+    """دسترسی برای ادمین یا استاد (برای صفحات مطلوبیت‌ها)."""
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        admin = session.get("admin")
+        if not admin:
+            return redirect(url_for("admin_login"))
+        role = admin.get("role", "admin")
+        if role not in ("super_admin", "admin", "instructor"):
+            flash("دسترسی مجاز نیست.", "error")
+            return redirect(url_for("admin_index"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def instructor_only_required(f):
+    """فقط استاد."""
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        admin = session.get("admin")
+        if not admin:
+            return redirect(url_for("admin_login"))
+        if admin.get("role") != "instructor":
+            flash("دسترسی فقط برای استاد مجاز است.", "error")
+            return redirect(url_for("admin_index"))
+        return f(*args, **kwargs)
+    return decorated
+
+
 def student_login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -228,15 +259,161 @@ def about():
 
 @app.route("/login-choice")
 def login_choice():
-    """صفحه انتخاب نوع ورود — دانشجو یا ادمین"""
+    """صفحه انتخاب نوع ورود — دانشجو، استاد یا ادمین"""
     survey = get_active_survey_info()
     # اگر دانشجو قبلاً وارد شده، به داشبورد هدایت شود
     if session.get("student"):
         return redirect(url_for("student_dashboard"))
-    # اگر ادمین وارد شده، به پنل ادمین هدایت شود
+    # اگر ادمین/استاد وارد شده، به پنل هدایت شود
     if session.get("admin"):
         return redirect(url_for("admin_index"))
     return render_template("website/login_selection.html", survey=survey)
+
+
+@app.route("/instructor/login", methods=["GET", "POST"])
+def instructor_login():
+    """ورود استاد."""
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+
+        if not username or not password:
+            flash("نام کاربری و رمز عبور را وارد کنید.", "error")
+            return render_template("instructor/login.html")
+
+        admin = db.get_admin_by_username(username)
+        if not admin or not verify_password(password, admin["password_hash"]):
+            flash("نام کاربری یا رمز عبور نادرست است.", "error")
+            return render_template("instructor/login.html")
+
+        if not admin["is_active"]:
+            flash("حساب شما غیرفعال است.", "error")
+            return render_template("instructor/login.html")
+
+        # فقط استادها می‌توانند از این مسیر وارد شوند
+        if admin.get("role") != "instructor":
+            flash("این حساب برای ورود استاد نیست. از ورود ادمین استفاده کنید.", "error")
+            return render_template("instructor/login.html")
+
+        session.permanent = True
+        session["admin"] = {
+            "id": admin["id"], "username": admin["username"],
+            "full_name": admin["full_name"], "role": admin["role"],
+        }
+        db.update_admin_last_login(admin["id"])
+        audit_log("login", description=f"ورود استاد {admin['username']}")
+        return redirect(url_for("instructor_dashboard"))
+
+    return render_template("instructor/login.html")
+
+
+@app.route("/instructor/register", methods=["GET", "POST"])
+def instructor_register():
+    """ثبت‌نام استاد جدید (با تأیید ادمین)."""
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        full_name = (request.form.get("full_name") or "").strip()
+        email = (request.form.get("email") or "").strip()
+        instructor_code = (request.form.get("instructor_code") or "").strip()
+        expert_group = (request.form.get("expert_group") or "").strip()
+        cooperation_type = (request.form.get("cooperation_type") or "").strip()
+
+        if not username or not password or not full_name:
+            flash("نام کاربری، رمز عبور و نام کامل الزامی است.", "error")
+            return render_template("instructor/register.html")
+
+        if len(password) < 6:
+            flash("رمز عبور باید حداقل ۶ کاراکتر باشد.", "error")
+            return render_template("instructor/register.html")
+
+        if password != confirm_password:
+            flash("رمز عبور و تأییدیه آن یکسان نیستند.", "error")
+            return render_template("instructor/register.html")
+
+        # بررسی تکراری نبودن username
+        existing = db.get_admin_by_username(username)
+        if existing:
+            flash("این نام کاربری قبلاً ثبت شده است.", "error")
+            return render_template("instructor/register.html")
+
+        # ساخت استاد جدید (به‌صورت غیرفعال تا ادمین تأیید کند)
+        ok = db.create_admin(
+            username=username,
+            password=password,
+            full_name=full_name,
+            email=email,
+            role="instructor",
+        )
+        if not ok:
+            flash("خطا در ثبت‌نام.", "error")
+            return render_template("instructor/register.html")
+
+        # ذخیره اطلاعات اضافی استاد در فایل mirror (بدون تغییر دیتابیس)
+        import json
+        instructor_extra_file = os.path.join(BASE_DIR, "instructor_profiles.json")
+        try:
+            data = {}
+            if os.path.exists(instructor_extra_file):
+                with open(instructor_extra_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            data[username] = {
+                "instructor_code": instructor_code,
+                "expert_group": expert_group,
+                "cooperation_type": cooperation_type,
+                "registered_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            with open(instructor_extra_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"instructor profile save error: {e}")
+
+        # فعال‌سازی خودکار اگر اولین استاد بود (یا باید ادمین تأیید کند)
+        flash("ثبت‌نام شما با موفقیت انجام شد. ادمین سامانه باید حساب شما را فعال کند.", "success")
+        return redirect(url_for("instructor_login"))
+
+    return render_template("instructor/register.html")
+
+
+@app.route("/instructor/dashboard")
+@login_required
+def instructor_dashboard():
+    """داشبورد استاد — دسترسی به مطلوبیت‌ها + داشبورد فقط‌خواندنی."""
+    admin = session.get("admin")
+    if not admin or admin.get("role") != "instructor":
+        flash("دسترسی فقط برای استاد مجاز است.", "error")
+        return redirect(url_for("admin_index"))
+
+    # آمار کلی برای داشبورد فقط‌خواندنی
+    total_users = db.execute_query("SELECT COUNT(*) AS c FROM authorized_users")[0]["c"]
+    total_requests = db.execute_query("SELECT COUNT(*) AS c FROM course_requests")[0]["c"]
+    total_courses = db.execute_query("SELECT COUNT(*) AS c FROM courses WHERE is_active=1")[0]["c"]
+
+    # آمار مطلوبیت‌های این استاد
+    instructor_username = admin.get("username", "")
+    my_teaching_prefs = []
+    my_time_prefs = []
+    if PREFERENCES_AVAILABLE:
+        all_teaching = prefs_module.get_all_teaching_preferences(db)
+        my_teaching_prefs = [p for p in all_teaching if p.get("instructor_username") == instructor_username
+                            or p.get("instructor_code") == instructor_username]
+        all_time = prefs_module.get_all_time_preferences(db)
+        my_time_prefs = [p for p in all_time if p.get("instructor_username") == instructor_username
+                        or p.get("instructor_code") == instructor_username]
+
+    survey = get_active_survey_info()
+
+    return render_template(
+        "instructor/dashboard.html",
+        admin=admin,
+        total_users=total_users,
+        total_requests=total_requests,
+        total_courses=total_courses,
+        my_teaching_count=len(my_teaching_prefs),
+        my_time_count=len(my_time_prefs),
+        survey=survey,
+    )
 
 
 @app.route("/download-app")
@@ -1106,11 +1283,31 @@ def api_time_preferences_upload():
 
 # --- صفحه‌های ادمین برای مطلوبیت‌ها ---
 @app.route("/admin/preferences")
-@login_required
+@admin_or_instructor_required
 def admin_preferences():
-    """صفحه مدیریت مطلوبیت‌های اساتید."""
+    """صفحه مدیریت مطلوبیت‌های اساتید — ادمین همه را می‌بیند، استاد فقط خودش را."""
     if not PREFERENCES_AVAILABLE:
         return render_template("admin/preferences_unavailable.html", admin=g.admin)
+    # اگر استاد است، فقط مطلوبیت‌های خودش را ببیند
+    if g.admin.get("role") == "instructor":
+        instructor_username = g.admin.get("username", "")
+        all_teaching = prefs_module.get_all_teaching_preferences(db)
+        teaching_items = [p for p in all_teaching if p.get("instructor_username") == instructor_username
+                         or p.get("instructor_code") == instructor_username]
+        all_time = prefs_module.get_all_time_preferences(db)
+        time_items = [p for p in all_time if p.get("instructor_username") == instructor_username
+                     or p.get("instructor_code") == instructor_username]
+        unique_courses = db.execute_query("SELECT unique_code, title FROM unique_courses ORDER BY title") or []
+        terms = slot_times_module.get_terms()["terms"]
+        return render_template(
+            "admin/preferences.html",
+            teaching_items=teaching_items,
+            time_items=time_items,
+            unique_courses=[dict(r) if not isinstance(r, dict) else r for r in unique_courses],
+            terms=terms,
+            admin=g.admin,
+            is_instructor=True,
+        )
     teaching_items = prefs_module.get_all_teaching_preferences(db)
     time_items = prefs_module.get_all_time_preferences(db)
     unique_courses = db.execute_query("SELECT unique_code, title FROM unique_courses ORDER BY title") or []

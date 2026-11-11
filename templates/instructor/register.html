@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ثبت‌نام استاد | سامانه نظرسنجی دروس</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('serve_admin_static', path='style.css') }}?v={{ APP_VERSION }}">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card" style="max-width:520px;">
+            <div class="login-logo" style="background:linear-gradient(135deg,#10b981,#059669);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M19 8v6M22 11h-6"/>
+                </svg>
+            </div>
+            <h1 class="login-title">ثبت‌نام استاد</h1>
+            <p class="login-sub">سامانه نظرسنجی دروس {{ SEMESTER_LABEL }}</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for cat, msg in messages %}
+                    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+                {% endfor %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('instructor_register') }}" id="registerForm">
+                <div class="form-group">
+                    <label class="form-label">نام و نام خانوادگی *</label>
+                    <input type="text" name="full_name" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">نام کاربری *</label>
+                    <input type="text" name="username" class="form-input" required dir="ltr" style="text-align:right;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">کد استاد</label>
+                    <input type="text" name="instructor_code" class="form-input" dir="ltr" style="text-align:right;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">گروه تخصصی</label>
+                    <input type="text" name="expert_group" class="form-input" placeholder="مثلاً مهندسی کامپیوتر">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">نوع همکاری</label>
+                    <select name="cooperation_type" class="form-select">
+                        <option value="">انتخاب کنید...</option>
+                        <option value="هیئت علمی">هیئت علمی</option>
+                        <option value="تمام‌وقت">تمام‌وقت</option>
+                        <option value="نیم‌وقت">نیم‌وقت</option>
+                        <option value="ساعتی">ساعتی</option>
+                        <option value="مهمان">مهمان</option>
+                        <option value="قراردادی">قراردادی</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ایمیل</label>
+                    <input type="email" name="email" class="form-input" dir="ltr" style="text-align:right;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">رمز عبور *</label>
+                    <input type="password" name="password" id="passwordInput" class="form-input" placeholder="حداقل ۶ کاراکتر" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">تأیید رمز عبور *</label>
+                    <input type="password" name="confirm_password" id="confirmInput" class="form-input" placeholder="رمز عبور را دوباره وارد کنید" required>
+                    <small id="confirmHint" style="color:var(--text-3);font-size:11px;display:block;margin-top:4px;">
+                        رمز عبور را دقیقاً مانند فیلد بالا وارد کنید
+                    </small>
+                </div>
+                <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);">ثبت‌نام</button>
+            </form>
+
+            <div class="login-back">
+                قبلاً ثبت‌نام کرده‌اید؟
+                <a href="{{ url_for('instructor_login') }}">ورود استاد</a>
+            </div>
+            <div class="login-back" style="margin-top:8px;">
+                <a href="{{ url_for('login_choice') }}">→ بازگشت به انتخاب نوع ورود</a>
+            </div>
+        </div>
+    </div>
+
+<script>
+(function() {
+    var passwordInput = document.getElementById('passwordInput');
+    var confirmInput = document.getElementById('confirmInput');
+    var confirmHint = document.getElementById('confirmHint');
+    var form = document.getElementById('registerForm');
+
+    function checkMatch() {
+        var p1 = passwordInput.value;
+        var p2 = confirmInput.value;
+        if (p2.length === 0) {
+            confirmHint.textContent = 'رمز عبور را دقیقاً مانند فیلد بالا وارد کنید';
+            confirmHint.style.color = 'var(--text-3)';
+            confirmInput.style.borderColor = '';
+        } else if (p1 === p2) {
+            confirmHint.textContent = '✓ رمزها مطابقت دارند';
+            confirmHint.style.color = '#10b981';
+            confirmInput.style.borderColor = '#10b981';
+        } else {
+            confirmHint.textContent = '✗ رمزها مطابقت ندارند';
+            confirmHint.style.color = '#ef4444';
+            confirmInput.style.borderColor = '#ef4444';
+        }
+    }
+    passwordInput.addEventListener('input', checkMatch);
+    confirmInput.addEventListener('input', checkMatch);
+
+    form.addEventListener('submit', function(e) {
+        if (passwordInput.value !== confirmInput.value) {
+            e.preventDefault();
+            alert('رمز عبور و تأییدیه آن مطابقت ندارند.');
+        }
+    });
+})();
+</script>
+</body>
+</html>
