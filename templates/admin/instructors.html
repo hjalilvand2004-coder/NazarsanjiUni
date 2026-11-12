@@ -130,8 +130,10 @@
                     {% else %}<span class="badge" style="background:#f1f5f9;color:#475569;">محلی</span>{% endif %}
                 </td>
                 <td>
-                    <button onclick="editInstructor({{ item.id }})" class="btn btn-ghost btn-sm">✏️</button>
-                    <button onclick="deleteInstructor({{ item.id }})" class="btn btn-ghost btn-sm" style="color:var(--danger);">🗑️</button>
+                    <div style="display:flex;gap:4px;justify-content:center;align-items:center;">
+                        <button onclick="editInstructor({{ item.id }})" class="btn btn-ghost btn-sm" title="ویرایش" style="padding:4px 8px;">✏️</button>
+                        <button onclick="deleteInstructor({{ item.id }})" class="btn btn-ghost btn-sm" title="حذف" style="color:var(--danger);padding:4px 8px;">🗑️</button>
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -497,14 +499,12 @@ async function testConnection() {
 
 // همگام‌سازی اساتید به جدول authorized_users
 async function syncToUsers() {
-    const password = prompt('رمز عبور پیش‌فرض برای اساتید (برای ورود):', 'Instructor@1405');
-    if (password === null) return;
-    if (!confirm('آیا از افزودن اساتید به جدول کاربران مطمئن هستید؟\nنام کاربری و رمز یکسان خواهند بود.')) return;
+    if (!confirm('آیا از افزودن اساتید به جدول کاربران مطمئن هستید؟\n\n📌 نکته مهم:\n• نام کاربری هر استاد = رمز عبور او\n• مثال: نام کاربری "ahmadi" → رمز عبور "ahmadi"\n• کاربران از نوع "استاد" ایجاد می‌شوند')) return;
     try {
         const r = await fetch('/api/instructors/sync-to-users', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({password: password})
+            body: JSON.stringify({})
         });
         const res = await r.json();
         if (res.ok) {

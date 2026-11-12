@@ -380,8 +380,10 @@
                     </td>
                     <td><code>{{ item.term_code or '—' }}</code></td>
                     <td>
-                        <button onclick="editTeaching({{ item.id }})" class="btn btn-ghost btn-sm">✏️</button>
-                        <button onclick="deleteTeaching({{ item.id }})" class="btn btn-ghost btn-sm" style="color:#ef4444;">🗑️</button>
+                        <div style="display:flex;gap:4px;justify-content:center;align-items:center;">
+                            <button onclick="editTeaching({{ item.id }})" class="btn btn-ghost btn-sm" title="ویرایش" style="padding:4px 8px;">✏️</button>
+                            <button onclick="deleteTeaching({{ item.id }})" class="btn btn-ghost btn-sm" title="حذف" style="color:#ef4444;padding:4px 8px;">🗑️</button>
+                        </div>
                     </td>
                 </tr>
                 {% else %}
@@ -433,8 +435,10 @@
                     </td>
                     <td><strong>{{ item.priority or 0 }}</strong></td>
                     <td>
-                        <button onclick="editTime({{ item.id }})" class="btn btn-ghost btn-sm">✏️</button>
-                        <button onclick="deleteTime({{ item.id }})" class="btn btn-ghost btn-sm" style="color:#ef4444;">🗑️</button>
+                        <div style="display:flex;gap:4px;justify-content:center;align-items:center;">
+                            <button onclick="editTime({{ item.id }})" class="btn btn-ghost btn-sm" title="ویرایش" style="padding:4px 8px;">✏️</button>
+                            <button onclick="deleteTime({{ item.id }})" class="btn btn-ghost btn-sm" title="حذف" style="color:#ef4444;padding:4px 8px;">🗑️</button>
+                        </div>
                     </td>
                 </tr>
                 {% else %}

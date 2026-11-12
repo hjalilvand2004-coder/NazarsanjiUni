@@ -112,11 +112,64 @@ def ensure_instructors_table(db):
         # افزودن ستون user_type به authorized_users (اگر وجود ندارد)
         try:
             cursor.execute("ALTER TABLE authorized_users ADD COLUMN user_type TEXT DEFAULT 'student'")
+            # ستون تازه اضافه شد — تمام رکوردهای فعلی student می‌شوند (DEFAULT)
         except Exception:
             pass  # اگر قبلاً اضافه شده
 
+        # بازسازی جدول authorized_users برای حذف CHECK constraint قدیمی روی role
+        # این کار فقط یک بار انجام می‌شود (با تشخیص از طریق schema)
+        # باید در یک کانکشن مستقل و خارج از transaction فعلی انجام شود
+        try:
+            schema_row = cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='authorized_users'").fetchone()
+            needs_rebuild = schema_row and "CHECK(role IN" in (schema_row[0] or "")
+        except Exception:
+            needs_rebuild = False
+
+        if needs_rebuild:
+            # commit 当前 transaction قبل از rebuild
+            conn.commit()
+            # کانکشن مستقل برای rebuild (PRAGMA foreign_keys باید خارج از transaction باشد)
+            rebuild_conn = sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+            try:
+                rebuild_conn.execute("PRAGMA foreign_keys=OFF")
+                rebuild_conn.execute("CREATE TABLE IF NOT EXISTS authorized_users_new (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, display_phone TEXT NOT NULL, normalized_phone TEXT NOT NULL UNIQUE, student_number TEXT UNIQUE, student_type TEXT CHECK(student_type IN('پیوسته','ناپیوسته')), role TEXT DEFAULT 'user', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, bale_id INTEGER, last_seen TIMESTAMP, is_blocked INTEGER DEFAULT 0, first_channel TEXT, password_hash TEXT, user_type TEXT DEFAULT 'student')")
+                rebuild_conn.execute("INSERT INTO authorized_users_new (id, name, display_phone, normalized_phone, student_number, student_type, role, created_at, bale_id, last_seen, is_blocked, first_channel, password_hash, user_type) SELECT id, name, display_phone, normalized_phone, student_number, student_type, role, created_at, bale_id, last_seen, is_blocked, first_channel, password_hash, COALESCE(user_type, 'student') FROM authorized_users")
+                rebuild_conn.execute("DROP TABLE authorized_users")
+                rebuild_conn.execute("ALTER TABLE authorized_users_new RENAME TO authorized_users")
+                rebuild_conn.commit()
+                rebuild_conn.execute("PRAGMA foreign_keys=ON")
+                logger.info("✓ authorized_users table rebuilt without old CHECK constraint on role")
+            except Exception as e:
+                logger.warning(f"rebuild authorized_users error: {e}")
+                try:
+                    rebuild_conn.rollback()
+                except Exception:
+                    pass
+            finally:
+                rebuild_conn.close()
+            # refresh cursor
+            cursor = conn.cursor()
+
+        # آپدیت رکوردهای موجود: اگر user_type خالی است، پیش‌فرض student
+        try:
+            cursor.execute("UPDATE authorized_users SET user_type = 'student' WHERE user_type IS NULL OR user_type = ''")
+        except Exception:
+            pass
+
+        # اگر نقش instructor است و user_type ست نشده، آن را instructor کن
+        try:
+            cursor.execute("UPDATE authorized_users SET user_type = 'instructor' WHERE role = 'instructor' AND (user_type IS NULL OR user_type = '' OR user_type = 'student')")
+        except Exception:
+            pass
+
+        # اگر نقش admin است، user_type را admin کن
+        try:
+            cursor.execute("UPDATE authorized_users SET user_type = 'admin' WHERE role = 'admin' AND (user_type IS NULL OR user_type = '' OR user_type = 'student')")
+        except Exception:
+            pass
+
         conn.commit()
-        logger.info("✓ instructors table ensured (with column migrations)")
+        logger.info("✓ instructors table ensured (with column migrations + user_type defaults)")
     return True
 
 
@@ -559,10 +612,9 @@ def import_instructors_excel(db, file_path: str) -> Dict[str, Any]:
 def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> Dict[str, Any]:
     """
     افزودن اساتید به جدول authorized_users (با نقش instructor) اگر قبلاً ثبت نشده‌اند.
-    نام کاربری و رمز عبور یکسان است (پیش‌فرض: Instructor@1405).
+    مهم: نام کاربری و رمز عبور یکسان هستند (رمز = نام کاربری هر استاد).
     """
     from src.database import hash_password
-    pw_hash = hash_password(default_password)
 
     instructors = get_all_instructors(db)
     if not instructors:
@@ -583,6 +635,10 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
             if not username:
                 continue
 
+            # رمز عبور = نام کاربری
+            password = username
+            pw_hash = hash_password(password)
+
             # بررسی تکراری نبودن (با student_number یا phone)
             existing = db.execute_query(
                 "SELECT id FROM authorized_users WHERE student_number = ? OR normalized_phone = ?",
@@ -592,7 +648,7 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
                 skipped_count += 1
                 continue
 
-            # افزودن به authorized_users با نقش instructor
+            # افزودن به authorized_users با نقش instructor و user_type=استاد
             ok = db.add_authorized_user(
                 name=full_name,
                 phone=phone,
@@ -603,6 +659,14 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
                 password_hash=pw_hash,
             )
             if ok:
+                # آپدیت user_type به instructor
+                try:
+                    db.execute_query(
+                        "UPDATE authorized_users SET user_type = 'instructor' WHERE student_number = ?",
+                        (username,)
+                    )
+                except Exception:
+                    pass
                 added_count += 1
             else:
                 errors.append(f"خطا در افزودن {username}")
@@ -615,7 +679,7 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
         "skipped": skipped_count,
         "total": len(instructors),
         "errors": errors[:5],
-        "message": f"{added_count} استاد به کاربران سامانه اضافه شد. {skipped_count} استاد قبلاً وجود داشت.",
+        "message": f"{added_count} استاد به کاربران سامانه اضافه شد (رمز عبور = نام کاربری). {skipped_count} استاد قبلاً وجود داشت.",
     }
 
 

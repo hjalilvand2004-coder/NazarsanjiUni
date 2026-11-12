@@ -1882,6 +1882,17 @@ def admin_users():
             "SELECT COUNT(*) AS c FROM login_history WHERE user_id = ?", (u["id"],)
         )
         u["login_count"] = login_cnt[0]["c"] if login_cnt else 0
+        # اطمینان از وجود user_type
+        if "user_type" not in u or not u.get("user_type"):
+            # تعیین از روی role
+            if u.get("role") == "instructor":
+                u["user_type"] = "instructor"
+            elif u.get("role") == "admin":
+                u["user_type"] = "admin"
+            elif u.get("role") == "group_admin":
+                u["user_type"] = "group_admin"
+            else:
+                u["user_type"] = "student"
 
     return render_template(
         "admin/users.html",

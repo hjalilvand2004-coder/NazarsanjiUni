@@ -28,7 +28,8 @@
                 <th>#</th>
                 <th>نام</th>
                 <th>شماره دانشجویی</th>
-                <th>نوع</th>
+                <th>نوع کاربر</th>
+                <th>نوع تحصیل</th>
                 <th>تلفن</th>
                 <th>پیشنهادها</th>
                 <th>تاریخ عضویت</th>
@@ -42,6 +43,18 @@
                 <td>{{ u.id }}</td>
                 <td>{{ u.name }}</td>
                 <td>{{ u.student_number or '—' }}</td>
+                <td>
+                    {# نوع کاربر: استاد / دانشجو / مدیرگروه / ادمین #}
+                    {% if u.role == 'instructor' or u.user_type == 'instructor' %}
+                    <span class="badge badge-success">👨‍🏫 استاد</span>
+                    {% elif u.role == 'admin' %}
+                    <span class="badge badge-primary">👑 ادمین</span>
+                    {% elif u.role == 'group_admin' or u.user_type == 'group_admin' %}
+                    <span class="badge badge-info">🔧 مدیرگروه</span>
+                    {% else %}
+                    <span class="badge badge-warning">🎓 دانشجو</span>
+                    {% endif %}
+                </td>
                 <td>{{ u.student_type or '—' }}</td>
                 <td>{{ u.display_phone }}</td>
                 <td><span class="badge badge-info">{{ u.requests_count }}</span></td>
@@ -52,7 +65,6 @@
                     {% else %}
                     <span class="badge badge-success">فعال</span>
                     {% endif %}
-                    {% if u.role == 'admin' %}<span class="badge badge-primary">ادمین</span>{% endif %}
                 </td>
                 <td class="actions-cell">
                     <form method="POST" action="{{ url_for('admin_user_block', user_id=u.id) }}" style="display:inline;">
@@ -67,7 +79,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">کاربری یافت نشد.</td></tr>
+            <tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-3);">کاربری یافت نشد.</td></tr>
             {% endfor %}
         </tbody>
     </table>
