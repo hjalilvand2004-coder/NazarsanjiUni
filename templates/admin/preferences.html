@@ -3,33 +3,7 @@
 
 {% block content %}
 <style>
-    /* اصلاح رنگ متن — همه متن‌ها تیره روی پس‌زمینه روشن */
-    .prefs-page { color: #1e293b; }
-    .prefs-page h1, .prefs-page h2, .prefs-page h3, .prefs-page h4 { color: #0f172a; }
-    .prefs-page .text-muted { color: #64748b; }
-    .prefs-page .form-label { color: #334155; font-weight: 600; }
-    .prefs-page .form-input, .prefs-page .form-select {
-        background: #ffffff; color: #0f172a;
-        border: 1.5px solid #cbd5e1;
-    }
-    .prefs-page .form-input:focus, .prefs-page .form-select:focus {
-        border-color: #6366f1;
-        box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
-    }
-    .prefs-page .card { background: #ffffff; color: #1e293b; }
-    .prefs-page .table { color: #1e293b; }
-    .prefs-page .table th { color: #475569; background: #f8fafc; }
-    .prefs-page .table td { color: #1e293b; }
-    .prefs-page .alert { color: #1e293b; }
-    .prefs-page .badge-success { background: #dcfce7; color: #166534; }
-    .prefs-page .badge-danger { background: #fee2e2; color: #991b1b; }
-    .prefs-page .badge-warning { background: #fef3c7; color: #92400e; }
-    .prefs-page .badge-info { background: #dbeafe; color: #1e40af; }
-    .prefs-page .stat-card { color: #1e293b; }
-    .prefs-page .stat-label { color: #64748b; }
-    .prefs-page .stat-value { color: #0f172a; }
-
-    /* مودال‌ها */
+    /* فقط استایل مودال‌ها — جدول‌ها به حالت دارک اصلی برمی‌گردند */
     .prefs-modal {
         background: #ffffff; color: #1e293b;
         border: 1px solid #e2e8f0;
@@ -313,8 +287,7 @@
     }
 </style>
 
-<div class="prefs-page">
-<div class="unified-page-header">
+<div class="admin-header">
     <div>
         <h1>📋 مطلوبیت‌های اساتید</h1>
         <div class="breadcrumb">
@@ -324,7 +297,7 @@
             {% endif %}
         </div>
     </div>
-    <div class="header-actions">
+    <div class="actions">
         <button onclick="openCoursePicker()" class="btn btn-primary btn-sm">
             📚 انتخاب درس‌های مطلوب
         </button>
@@ -349,27 +322,21 @@
 {% endwith %}
 
 <!-- آمار -->
-<div class="unified-stats-grid">
-    <div class="unified-stat-card">
-        <div class="stat-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
-        <div class="stat-content">
-            <div class="stat-num">{{ teaching_items|length }}</div>
-            <div class="stat-label-text">مطلوبیت‌های تدریس</div>
-        </div>
+<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+        <div class="stat-label">مطلوبیت‌های تدریس</div>
+        <div class="stat-value">{{ teaching_items|length }}</div>
     </div>
-    <div class="unified-stat-card">
-        <div class="stat-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-        <div class="stat-content">
-            <div class="stat-num">{{ time_items|length }}</div>
-            <div class="stat-label-text">مطلوبیت‌های زمان</div>
-        </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div class="stat-label">مطلوبیت‌های زمان</div>
+        <div class="stat-value">{{ time_items|length }}</div>
     </div>
-    <div class="unified-stat-card">
-        <div class="stat-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
-        <div class="stat-content">
-            <div class="stat-num">{{ unique_courses|length }}</div>
-            <div class="stat-label-text">دروس یکتا</div>
-        </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        <div class="stat-label">دروس یکتا</div>
+        <div class="stat-value">{{ unique_courses|length }}</div>
     </div>
 </div>
 
@@ -381,15 +348,12 @@
 
 <!-- محتوای تب تدریس -->
 <div id="tab-teaching">
-    <div class="unified-table-toolbar">
-        <input type="text" id="teaching-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;" oninput="filterTeaching()">
-    </div>
-    <div class="unified-table-wrap">
-        <div class="table-scroll">
+    <input type="text" id="teaching-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;margin-bottom:12px;" oninput="filterTeaching()">
+    <div class="card">
         <table class="table">
             <thead>
                 <tr>
-                    <th class="row-number">#</th>
+                    <th>#</th>
                     <th>کد یکتا درس</th>
                     <th>نام درس</th>
                     <th>نام استاد</th>
@@ -403,7 +367,7 @@
             <tbody>
                 {% for item in teaching_items %}
                 <tr data-search="{{ item.course_name }} {{ item.instructor_name }} {{ item.unique_course_code }}">
-                    <td class="row-number">{{ loop.index }}</td>
+                    <td>{{ loop.index }}</td>
                     <td><code>{{ item.unique_course_code or '—' }}</code></td>
                     <td>{{ item.course_name or '—' }}</td>
                     <td>{{ item.instructor_name or '—' }}</td>
@@ -421,25 +385,23 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="9">هیچ مطلوبیت تدریسی ثبت نشده است. با دکمه «📚 انتخاب درس‌های مطلوب» شروع کنید.</td></tr>
+                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">
+                    هیچ مطلوبیت تدریسی ثبت نشده است. با دکمه «📚 انتخاب درس‌های مطلوب» شروع کنید.
+                </td></tr>
                 {% endfor %}
             </tbody>
         </table>
-        </div>
     </div>
 </div>
 
 <!-- محتوای تب زمان -->
 <div id="tab-time" style="display:none;">
-    <div class="unified-table-toolbar">
-        <input type="text" id="time-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;" oninput="filterTime()">
-    </div>
-    <div class="unified-table-wrap">
-        <div class="table-scroll">
+    <input type="text" id="time-search" class="form-input" placeholder="🔍 جستجو..." style="max-width:300px;margin-bottom:12px;" oninput="filterTime()">
+    <div class="card">
         <table class="table">
             <thead>
                 <tr>
-                    <th class="row-number">#</th>
+                    <th>#</th>
                     <th>روز</th>
                     <th>نام استاد</th>
                     <th>شروع</th>
@@ -453,7 +415,7 @@
             <tbody>
                 {% for item in time_items %}
                 <tr data-search="{{ item.instructor_name }} {{ item.day }} {{ item.instructor_code }}">
-                    <td class="row-number">{{ loop.index }}</td>
+                    <td>{{ loop.index }}</td>
                     <td>{{ item.day or '—' }}</td>
                     <td>{{ item.instructor_name or '—' }}</td>
                     <td><code dir="ltr">{{ item.start_time or '—' }}</code></td>
@@ -476,11 +438,12 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="9">هیچ مطلوبیت زمانی ثبت نشده است. با دکمه «📅 انتخاب زمان‌های مطلوب» شروع کنید.</td></tr>
+                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">
+                    هیچ مطلوبیت زمانی ثبت نشده است. با دکمه «📅 انتخاب زمان‌های مطلوب» شروع کنید.
+                </td></tr>
                 {% endfor %}
             </tbody>
         </table>
-        </div>
     </div>
 </div>
 
@@ -981,5 +944,4 @@ async function uploadTimeExcel(input) {
     input.value = '';
 }
 </script>
-</div>
 {% endblock %}
