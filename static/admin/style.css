@@ -659,6 +659,309 @@ a:hover { color: var(--accent-2); }
     justify-content: flex-end;
 }
 
+/* ==================================================
+   استایل واحد و حرفه‌ای جداول (Dari Yekta)
+   ================================================== */
+
+/* کانتینر جدول — کارت سفید با سایه ملایم */
+.unified-table-wrap {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    margin-bottom: 16px;
+}
+
+/* هدر جدول — گرادیان ملایم */
+.unified-table-wrap .table thead th {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 14px 16px;
+    text-transform: none;
+    letter-spacing: 0;
+    border-bottom: 2px solid #4338ca;
+    text-align: right;
+    position: relative;
+}
+
+.unified-table-wrap .table thead th:first-child {
+    border-top-right-radius: 16px;
+}
+
+.unified-table-wrap .table thead th:last-child {
+    border-top-left-radius: 16px;
+}
+
+/* ردیف‌های جدول */
+.unified-table-wrap .table tbody td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+/* ردیف زوج/فرد — الگوی راه‌راه ملایم */
+.unified-table-wrap .table tbody tr:nth-child(even) td {
+    background: #fafbfc;
+}
+
+/* هاور ردیف — هایلایت بنفش ملایم */
+.unified-table-wrap .table tbody tr:hover td {
+    background: #eef2ff;
+    transition: background 0.15s ease;
+}
+
+/* ردیف آخر — بدون border پایین */
+.unified-table-wrap .table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* متن placeholder برای جدول خالی */
+.unified-table-wrap .table tbody tr.empty-row td {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 13px;
+    padding: 32px 16px;
+    background: #f8fafc;
+}
+
+/* ستون # (ردیف) */
+.unified-table-wrap .table td.row-number,
+.unified-table-wrap .table th.row-number {
+    text-align: center;
+    width: 50px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+/* فیلدهای code در جدول */
+.unified-table-wrap .table code {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'Vazirmatn', monospace;
+    border: 1px solid #e2e8f0;
+}
+
+/* badge‌ها در جدول — رنگ‌بندی واضح */
+.unified-table-wrap .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.unified-table-wrap .badge-success {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.unified-table-wrap .badge-danger {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.unified-table-wrap .badge-warning {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.unified-table-wrap .badge-info {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.unified-table-wrap .badge-neutral {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+/* دکمه‌های عملیات در جدول */
+.unified-table-wrap .btn-ghost.btn-sm {
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    transition: all 0.15s ease;
+}
+
+.unified-table-wrap .btn-ghost.btn-sm:hover {
+    background: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* فیلتر و جستجو */
+.unified-table-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.unified-table-toolbar .form-input,
+.unified-table-toolbar .form-select {
+    background: #ffffff;
+    color: #0f172a;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.unified-table-toolbar .form-input:focus,
+.unified-table-toolbar .form-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+    outline: none;
+}
+
+.unified-table-toolbar .result-info {
+    font-size: 12px;
+    color: #64748b;
+    margin-right: auto;
+}
+
+.unified-table-toolbar .result-info strong {
+    color: #6366f1;
+    font-weight: 700;
+}
+
+/* اسکرول‌بار سفارشی برای جدول */
+.unified-table-wrap .table-scroll {
+    overflow-x: auto;
+}
+
+.unified-table-wrap .table-scroll::-webkit-scrollbar {
+    height: 6px;
+}
+
+.unified-table-wrap .table-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.unified-table-wrap .table-scroll::-webkit-scrollbar-thumb {
+    background: #c7d2fe;
+    border-radius: 3px;
+}
+
+.unified-table-wrap .table-scroll::-webkit-scrollbar-thumb:hover {
+    background: #a5b4fc;
+}
+
+/* آمار بالای جدول */
+.unified-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.unified-stat-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+}
+
+.unified-stat-card:hover {
+    border-color: #c7d2fe;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12);
+}
+
+.unified-stat-card .stat-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6366f1;
+    flex-shrink: 0;
+}
+
+.unified-stat-card .stat-icon-wrap svg {
+    width: 22px;
+    height: 22px;
+}
+
+.unified-stat-card .stat-content {
+    flex: 1;
+}
+
+.unified-stat-card .stat-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.unified-stat-card .stat-label-text {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* هدر صفحه با عنوان و توضیح */
+.unified-page-header {
+    background: linear-gradient(135deg, #ffffff, #f8fafc);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.unified-page-header h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.unified-page-header .breadcrumb {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 4px;
+}
+
+.unified-page-header .header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 /* Badges */
 .badge {
     display: inline-flex;

@@ -37,12 +37,12 @@
     .inst-page .breadcrumb { color: #64748b; }
 </style>
 <div class="inst-page">
-<div class="admin-header">
+<div class="unified-page-header">
     <div>
         <h1>👨‍🏫 اساتید</h1>
         <div class="breadcrumb">خانه / اطلاعات پایه / اساتید</div>
     </div>
-    <div class="actions">
+    <div class="header-actions">
         <button onclick="openAddInstructorModal()" class="btn btn-primary btn-sm">
             ➕ افزودن استاد
         </button>
@@ -66,31 +66,39 @@
 {% endwith %}
 
 <!-- آمار -->
-<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;">
-    <div class="stat-card">
-        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-        <div class="stat-label">کل اساتید</div>
-        <div class="stat-value">{{ instructors|length }}</div>
+<div class="unified-stats-grid">
+    <div class="unified-stat-card">
+        <div class="stat-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div class="stat-content">
+            <div class="stat-num">{{ instructors|length }}</div>
+            <div class="stat-label-text">کل اساتید</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
-        <div class="stat-label">اساتید فعال</div>
-        <div class="stat-value" style="color:var(--success);">{{ instructors|selectattr('is_active')|list|length }}</div>
+    <div class="unified-stat-card">
+        <div class="stat-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+        <div class="stat-content">
+            <div class="stat-num" style="color:#10b981;">{{ instructors|selectattr('is_active')|list|length }}</div>
+            <div class="stat-label-text">اساتید فعال</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg></div>
-        <div class="stat-label">هیئت علمی</div>
-        <div class="stat-value">{{ instructors|selectattr('cooperation_type', 'equalto', 'هیئت علمی')|list|length }}</div>
+    <div class="unified-stat-card">
+        <div class="stat-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg></div>
+        <div class="stat-content">
+            <div class="stat-num">{{ instructors|selectattr('cooperation_type', 'equalto', 'هیئت علمی')|list|length }}</div>
+            <div class="stat-label-text">هیئت علمی</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-        <div class="stat-label">آخرین sync</div>
-        <div class="stat-value" style="font-size:14px;">{{ sync_settings.last_sync_at or '—' }}</div>
+    <div class="unified-stat-card">
+        <div class="stat-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div class="stat-content">
+            <div class="stat-num" style="font-size:14px;">{{ sync_settings.last_sync_at or '—' }}</div>
+            <div class="stat-label-text">آخرین sync</div>
+        </div>
     </div>
 </div>
 
-<!-- فیلتر -->
-<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+<!-- فیلتر و جستجو -->
+<div class="unified-table-toolbar">
     <input type="text" id="search-input" class="form-input" placeholder="🔍 جستجو..." value="{{ search }}" oninput="filterTable()" style="max-width:300px;">
     <select id="coop-filter" class="form-select" style="width:auto;" onchange="filterTable()">
         <option value="">همه انواع همکاری</option>
@@ -100,15 +108,16 @@
         <option value="حق التدریس" {% if cooperation_type == 'حق التدریس' %}selected{% endif %}>حق التدریس</option>
         <option value="سایر" {% if cooperation_type == 'سایر' %}selected{% endif %}>سایر</option>
     </select>
-    <span style="font-size:12px;color:var(--text-3);">تعداد نتایج: <strong id="result-count">{{ instructors|length }}</strong></span>
+    <span class="result-info">تعداد نتایج: <strong id="result-count">{{ instructors|length }}</strong></span>
 </div>
 
 <!-- جدول -->
-<div class="card">
+<div class="unified-table-wrap">
+    <div class="table-scroll">
     <table class="table" id="instructors-table">
         <thead>
             <tr>
-                <th>#</th>
+                <th class="row-number">#</th>
                 <th>کد</th>
                 <th>نام و نام خانوادگی</th>
                 <th>نام کاربری</th>
@@ -150,12 +159,11 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-3);">
-                هیچ استادی ثبت نشده است. برای شروع، می‌توانید از دکمه «افزودن استاد» یا «بارگذاری اکسل» یا «همگام‌سازی» استفاده کنید.
-            </td></tr>
+            <tr class="empty-row"><td colspan="11">هیچ استادی ثبت نشده است. برای شروع، می‌توانید از دکمه «افزودن استاد» یا «بارگذاری اکسل» یا «همگام‌سازی» استفاده کنید.</td></tr>
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 
 <!-- مودال افزودن/ویرایش استاد -->
