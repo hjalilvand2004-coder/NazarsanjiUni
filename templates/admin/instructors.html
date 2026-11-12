@@ -276,6 +276,9 @@
                 <button type="button" onclick="testConnection()" class="btn btn-ghost" style="background:#dbeafe;color:#1e40af;border-color:#93c5fd;">
                     🔌 تست اتصال
                 </button>
+                <button type="button" onclick="syncDebug()" class="btn btn-ghost" style="background:#fef3c7;color:#92400e;border-color:#fcd34d;">
+                    🐛 دیباگ کامل
+                </button>
                 <button type="button" onclick="runSyncNow()" class="btn btn-primary" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);">
                     🔄 همگام‌سازی الان
                 </button>
@@ -438,6 +441,40 @@ async function runSyncNow() {
         }
     } catch (e) {
         alert('خطا در ارتباط: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+    }
+}
+
+// دیباگ کامل — لاگ مرحله به مرحله
+async function syncDebug() {
+    const service_url = document.getElementById('sync-service_url').value || 'http://188.212.96.235:8083';
+    const username = document.getElementById('sync-username').value || 'admin';
+    const password = document.getElementById('sync-password').value || 'admin123';
+    const btn = event.target;
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'در حال دیباگ...';
+    try {
+        const r = await fetch('/api/instructors/sync-debug', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({service_url, username, password})
+        });
+        const res = await r.json();
+        let msg = `${res.message || ''}\n\n=== لاگ دیباگ ===\n`;
+        if (res.debug_log) {
+            res.debug_log.forEach((line, i) => {
+                msg += `${i+1}. ${line}\n`;
+            });
+        }
+        alert(msg);
+        if (res.final_count > 0) {
+            location.reload();
+        }
+    } catch (e) {
+        alert('خطا: ' + e.message);
     } finally {
         btn.disabled = false;
         btn.textContent = origText;

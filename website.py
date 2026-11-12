@@ -1485,6 +1485,79 @@ def api_instructors_sync_test():
     })
 
 
+@app.route("/api/instructors/sync-debug", methods=["POST"])
+@login_required
+def api_instructors_sync_debug():
+    """همگام‌سازی با لاگ کامل — برای دیباگ."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    service_url = data.get("service_url", "http://188.212.96.235:8083")
+    username = data.get("username", "admin")
+    password = data.get("password", "admin123")
+    debug_log = []
+    debug_log.append(f"1. شروع sync-debug با service_url={service_url}, username={username}")
+    debug_log.append("2. شروع fetch از سامانه برنامه‌ریزی...")
+    remote_data, err = instructors_module.fetch_instructors_from_remote(
+        service_url=service_url, username=username, password=password,
+    )
+    if err:
+        debug_log.append(f"3. fetch خطا: {err}")
+        return jsonify({"ok": False, "error": err, "debug_log": debug_log,
+                        "message": f"خطا در واکشی: {err}"})
+    debug_log.append(f"3. {len(remote_data or [])} استاد دریافت شد")
+    if not remote_data:
+        debug_log.append("4. هیچ استادی دریافت نشد")
+        return jsonify({"ok": False, "error": "no_data", "debug_log": debug_log})
+    debug_log.append("4. شروع ذخیره در جدول instructors...")
+    try:
+        instructors_module.ensure_instructors_table(db)
+        debug_log.append("5. جدول instructors تضمین شد")
+    except Exception as e:
+        debug_log.append(f"5. خطا در migration: {e}")
+        return jsonify({"ok": False, "error": str(e), "debug_log": debug_log})
+    debug_log.append("6. تست INSERT مستقیم با 1 رکورد...")
+    try:
+        first = remote_data[0]
+        code = str(first.get("code") or first.get("id") or "")
+        full_name = first.get("name") or first.get("full_name") or ""
+        debug_log.append(f"   code={code}, full_name={full_name}")
+        existing = db.execute_query("SELECT id FROM instructors WHERE code = ?", (code,))
+        debug_log.append(f"   existing query result: {existing}")
+        if existing:
+            debug_log.append(f"   استاد با code={code} قبلاً ثبت شده")
+        else:
+            # INSERT مستقیم با SQL
+            sql = "INSERT INTO instructors (row_number, code, username, full_name, phone, email, \"group\", cooperation_type, max_teaching_units, role, is_active, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            params = (int(first.get("row_number") or 0), code,
+                     (first.get("username") or "").lstrip("@") or code,
+                     full_name, first.get("phone") or "", first.get("email", ""),
+                     first.get("group") or "", first.get("cooperation_type") or "",
+                     int(first.get("max_teaching_units") or 0),
+                     "instructor", 1, "remote")
+            try:
+                result = db.execute_query(sql, params)
+                debug_log.append(f"   INSERT result: {result}")
+            except Exception as e2:
+                debug_log.append(f"   INSERT error: {e2}")
+    except Exception as e:
+        debug_log.append(f"6. خطا: {e}")
+    try:
+        count_rows = db.execute_query("SELECT COUNT(*) AS c FROM instructors")
+        final_count = count_rows[0]["c"] if count_rows else 0
+        debug_log.append(f"7. تعداد نهایی در جدول: {final_count}")
+    except Exception as e:
+        debug_log.append(f"7. خطا در COUNT: {e}")
+        final_count = -1
+    return jsonify({
+        "ok": True,
+        "fetched": len(remote_data or []),
+        "final_count": final_count,
+        "debug_log": debug_log,
+        "message": f"دیباگ: {len(remote_data or [])} دریافت، {final_count} در جدول"
+    })
+
+
 @app.route("/api/instructors/sync-to-users", methods=["POST"])
 @login_required
 def api_instructors_sync_to_users():
@@ -1547,6 +1620,59 @@ def api_instructors_diagnostic():
                                 "value": [{"name": r["name"], "type": r["type"]} for r in cols] if cols else []})
     except Exception as e:
         diag["checks"].append({"check": "schema", "ok": False, "error": str(e)})
+    # 5. بررسی همه جداول دیتابیس (شاید اساتید در جدول دیگری ثبت شده باشند)
+    try:
+        all_tables = db.execute_query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        table_names = [r["name"] for r in all_tables] if all_tables else []
+        diag["checks"].append({"check": "all_tables", "ok": True, "value": table_names})
+        # برای هر جدولی که ممکن است مرتبط باشد، تعداد رکوردها را بگیر
+        for tname in table_names:
+            if 'instructor' in tname.lower() or 'professor' in tname.lower() or 'teacher' in tname.lower():
+                try:
+                    tcount_rows = db.execute_query(f"SELECT COUNT(*) AS c FROM {tname}")
+                    tcount = tcount_rows[0]["c"] if tcount_rows else 0
+                    diag["checks"].append({"check": f"table_{tname}_count", "ok": True, "value": tcount})
+                    if tcount > 0 and tname != "instructors":
+                        # نمونه رکوردها از جدول دیگر
+                        try:
+                            other_sample = db.execute_query(f"SELECT * FROM {tname} LIMIT 2")
+                            diag["checks"].append({"check": f"table_{tname}_sample", "ok": True,
+                                                    "value": [dict(r) if not isinstance(r, dict) else r for r in other_sample]})
+                        except Exception as e:
+                            diag["checks"].append({"check": f"table_{tname}_sample", "ok": False, "error": str(e)})
+                except Exception as e:
+                    diag["checks"].append({"check": f"table_{tname}_count", "ok": False, "error": str(e)})
+    except Exception as e:
+        diag["checks"].append({"check": "all_tables", "ok": False, "error": str(e)})
+    # 6. تنظیمات sync
+    try:
+        sync_settings = instructors_module.load_sync_settings()
+        # پاک کردن password برای امنیت
+        safe_settings = dict(sync_settings)
+        if safe_settings.get("password"):
+            safe_settings["password"] = "***"
+        diag["checks"].append({"check": "sync_settings", "ok": True, "value": safe_settings})
+    except Exception as e:
+        diag["checks"].append({"check": "sync_settings", "ok": False, "error": str(e)})
+    # 7. تست مستقیم fetch
+    try:
+        sync_settings = instructors_module.load_sync_settings()
+        if sync_settings.get("enabled") and sync_settings.get("service_url"):
+            remote_data, fetch_err = instructors_module.fetch_instructors_from_remote(
+                service_url=sync_settings["service_url"],
+                username=sync_settings.get("username", ""),
+                password=sync_settings.get("password", ""),
+            )
+            if fetch_err:
+                diag["checks"].append({"check": "fetch_test", "ok": False, "error": fetch_err})
+            else:
+                diag["checks"].append({"check": "fetch_test", "ok": True,
+                                        "value": f"{len(remote_data or [])} instructors fetched"})
+        else:
+            diag["checks"].append({"check": "fetch_test", "ok": False,
+                                    "error": "sync disabled or service_url missing"})
+    except Exception as e:
+        diag["checks"].append({"check": "fetch_test", "ok": False, "error": str(e)})
     return jsonify(diag)
 
 
