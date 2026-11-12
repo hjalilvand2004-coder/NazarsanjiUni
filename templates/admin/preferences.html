@@ -2,6 +2,318 @@
 {% block title %}مطلوبیت‌های اساتید{% endblock %}
 
 {% block content %}
+<style>
+    /* اصلاح رنگ متن — همه متن‌ها تیره روی پس‌زمینه روشن */
+    .prefs-page { color: #1e293b; }
+    .prefs-page h1, .prefs-page h2, .prefs-page h3, .prefs-page h4 { color: #0f172a; }
+    .prefs-page .text-muted { color: #64748b; }
+    .prefs-page .form-label { color: #334155; font-weight: 600; }
+    .prefs-page .form-input, .prefs-page .form-select {
+        background: #ffffff; color: #0f172a;
+        border: 1.5px solid #cbd5e1;
+    }
+    .prefs-page .form-input:focus, .prefs-page .form-select:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
+    }
+    .prefs-page .card { background: #ffffff; color: #1e293b; }
+    .prefs-page .table { color: #1e293b; }
+    .prefs-page .table th { color: #475569; background: #f8fafc; }
+    .prefs-page .table td { color: #1e293b; }
+    .prefs-page .alert { color: #1e293b; }
+    .prefs-page .badge-success { background: #dcfce7; color: #166534; }
+    .prefs-page .badge-danger { background: #fee2e2; color: #991b1b; }
+    .prefs-page .badge-warning { background: #fef3c7; color: #92400e; }
+    .prefs-page .badge-info { background: #dbeafe; color: #1e40af; }
+    .prefs-page .stat-card { color: #1e293b; }
+    .prefs-page .stat-label { color: #64748b; }
+    .prefs-page .stat-value { color: #0f172a; }
+
+    /* مودال‌ها */
+    .prefs-modal {
+        background: #ffffff; color: #1e293b;
+        border: 1px solid #e2e8f0;
+        border-radius: 24px;
+    }
+    .prefs-modal h3, .prefs-modal h4 { color: #0f172a; }
+    .prefs-modal .modal-header {
+        border-bottom: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04));
+    }
+    .prefs-modal .modal-footer {
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+    .prefs-modal .close-btn { color: #64748b; background: none; border: none; cursor: pointer; font-size: 22px; }
+    .prefs-modal .close-btn:hover { color: #ef4444; }
+
+    /* تقویم هفتگی */
+    .weekly-calendar {
+        background: #f8fafc; border: 1px solid #e2e8f0;
+        border-radius: 14px; padding: 18px;
+    }
+    .day-btn {
+        padding: 12px 8px;
+        background: #ffffff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: #475569;
+        transition: all 0.2s;
+    }
+    .day-btn:hover {
+        border-color: #6366f1;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(99,102,241,0.15);
+    }
+    .day-btn.active {
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 4px 12px rgba(99,102,241,0.35);
+    }
+
+    /* بازه‌های زمانی سه دسته */
+    .period-card {
+        padding: 20px;
+        background: #ffffff;
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.25s;
+        position: relative;
+    }
+    .period-card:hover {
+        border-color: #6366f1;
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(99,102,241,0.15);
+    }
+    .period-card.selected {
+        background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(79,70,229,0.05));
+        border-color: #6366f1;
+    }
+    .period-card .period-icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+    .period-card .period-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 4px;
+    }
+    .period-card .period-desc {
+        font-size: 12px;
+        color: #64748b;
+    }
+    .period-card .period-check {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 24px;
+        height: 24px;
+        background: #6366f1;
+        color: white;
+        border-radius: 50%;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    .period-card.selected .period-check {
+        display: flex;
+    }
+
+    /* اسلات‌ها */
+    .slot-card {
+        padding: 14px;
+        background: #ffffff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 12px;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.2s;
+        position: relative;
+        color: #1e293b;
+    }
+    .slot-card:hover {
+        border-color: #8b5cf6;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(139,92,246,0.2);
+    }
+    .slot-card.selected {
+        background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(124,58,237,0.1));
+        border-color: #8b5cf6;
+    }
+    .slot-card .slot-time {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        direction: ltr;
+        margin-bottom: 4px;
+    }
+    .slot-card .slot-period {
+        font-size: 11px;
+        color: #64748b;
+    }
+    .slot-card .priority-badge {
+        position: absolute;
+        top: -8px;
+        left: -8px;
+        background: #6366f1;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    /* دروس دسته‌بندی‌شده */
+    .course-group-section {
+        margin-bottom: 18px;
+    }
+    .course-group-header {
+        background: #f1f5f9;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+    }
+    .course-group-header:hover {
+        background: #e2e8f0;
+    }
+    .course-group-header .toggle-icon {
+        transition: transform 0.2s;
+    }
+    .course-group-header.collapsed .toggle-icon {
+        transform: rotate(-90deg);
+    }
+    .course-group-items {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .course-group-items.hidden {
+        display: none;
+    }
+    .course-pick-card {
+        padding: 12px;
+        background: #ffffff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #1e293b;
+    }
+    .course-pick-card:hover {
+        border-color: #6366f1;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(99,102,241,0.15);
+    }
+    .course-pick-card.selected {
+        background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(79,70,229,0.05));
+        border-color: #6366f1;
+    }
+    .course-pick-card .course-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .course-pick-card input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: #6366f1;
+        margin-top: 2px;
+    }
+    .course-pick-card .course-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #0f172a;
+    }
+    .course-pick-card .course-meta {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 4px;
+    }
+
+    /* انتخاب‌های فعلی */
+    .selection-item {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        position: relative;
+        color: #1e293b;
+    }
+    .selection-item .priority-circle {
+        width: 28px;
+        height: 28px;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 13px;
+        flex-shrink: 0;
+        box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+    }
+    .selection-item .selection-info {
+        flex: 1;
+        font-size: 12px;
+        color: #1e293b;
+    }
+    .selection-item .selection-info strong {
+        color: #0f172a;
+        display: block;
+        direction: ltr;
+        text-align: right;
+    }
+    .selection-item .selection-info span {
+        color: #64748b;
+        font-size: 10px;
+    }
+    .selection-item .remove-btn {
+        background: #fee2e2;
+        color: #ef4444;
+        border: none;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .selection-item .remove-btn:hover {
+        background: #ef4444;
+        color: white;
+    }
+</style>
+
+<div class="prefs-page">
 <div class="admin-header">
     <div>
         <h1>📋 مطلوبیت‌های اساتید</h1>
@@ -56,9 +368,9 @@
 </div>
 
 <!-- تب‌ها -->
-<div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--glass-border);">
-    <button class="tab-btn active" data-tab="teaching" onclick="switchTab('teaching')" style="padding:10px 18px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);">📚 مطلوبیت‌های تدریس</button>
-    <button class="tab-btn" data-tab="time" onclick="switchTab('time')" style="padding:10px 18px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text-3);border-bottom:2px solid transparent;">⏰ مطلوبیت‌های زمان</button>
+<div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid #e2e8f0;">
+    <button class="tab-btn active" data-tab="teaching" onclick="switchTab('teaching')" style="padding:10px 18px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:#6366f1;border-bottom:2px solid #6366f1;">📚 مطلوبیت‌های تدریس</button>
+    <button class="tab-btn" data-tab="time" onclick="switchTab('time')" style="padding:10px 18px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:#64748b;border-bottom:2px solid transparent;">⏰ مطلوبیت‌های زمان</button>
 </div>
 
 <!-- محتوای تب تدریس -->
@@ -96,11 +408,11 @@
                     <td><code>{{ item.term_code or '—' }}</code></td>
                     <td>
                         <button onclick="editTeaching({{ item.id }})" class="btn btn-ghost btn-sm">✏️</button>
-                        <button onclick="deleteTeaching({{ item.id }})" class="btn btn-ghost btn-sm" style="color:var(--danger);">🗑️</button>
+                        <button onclick="deleteTeaching({{ item.id }})" class="btn btn-ghost btn-sm" style="color:#ef4444;">🗑️</button>
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">
+                <tr><td colspan="9" style="text-align:center;padding:30px;color:#64748b;">
                     هیچ مطلوبیت تدریسی ثبت نشده است. با دکمه «📚 انتخاب درس‌های مطلوب» شروع کنید.
                 </td></tr>
                 {% endfor %}
@@ -137,6 +449,7 @@
                     <td><code dir="ltr">{{ item.end_time or '—' }}</code></td>
                     <td>
                         {% if item.time_group == 'morning' %}صبح
+                        {% elif item.time_group == 'noon' %}ظهر
                         {% elif item.time_group == 'afternoon' %}بعدازظهر
                         {% elif item.time_group == 'evening' %}عصر
                         {% else %}{{ item.time_group or '—' }}{% endif %}
@@ -148,11 +461,11 @@
                     <td><strong>{{ item.priority or 0 }}</strong></td>
                     <td>
                         <button onclick="editTime({{ item.id }})" class="btn btn-ghost btn-sm">✏️</button>
-                        <button onclick="deleteTime({{ item.id }})" class="btn btn-ghost btn-sm" style="color:var(--danger);">🗑️</button>
+                        <button onclick="deleteTime({{ item.id }})" class="btn btn-ghost btn-sm" style="color:#ef4444;">🗑️</button>
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">
+                <tr><td colspan="9" style="text-align:center;padding:30px;color:#64748b;">
                     هیچ مطلوبیت زمانی ثبت نشده است. با دکمه «📅 انتخاب زمان‌های مطلوب» شروع کنید.
                 </td></tr>
                 {% endfor %}
@@ -161,24 +474,24 @@
     </div>
 </div>
 
-<!-- ====== Course Picker Modal (گرافیکی) ====== -->
+<!-- ====== Course Picker Modal ====== -->
 <div id="course-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:0;max-width:900px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--glass-border);background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.05));">
+    <div class="prefs-modal" style="max-width:920px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;">
             <div>
-                <h3 style="font-size:18px;color:var(--text-1);">📚 انتخاب درس‌های مطلوب</h3>
-                <p style="font-size:12px;color:var(--text-3);margin-top:4px;">درس‌هایی که تمایل به تدریس آن‌ها دارید را انتخاب کنید</p>
+                <h3 style="font-size:18px;">📚 انتخاب درس‌های مطلوب</h3>
+                <p style="font-size:12px;color:#64748b;margin-top:4px;">درس‌های مورد علاقه خود را انتخاب کنید — بر اساس گروه دسته‌بندی شده</p>
             </div>
-            <button onclick="closeCoursePicker()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:24px;">✕</button>
+            <button onclick="closeCoursePicker()" class="close-btn">✕</button>
         </div>
         <div style="padding:20px 28px;overflow-y:auto;flex:1;">
             <input type="text" id="course-search-input" class="form-input" placeholder="🔍 جستجوی درس..." style="width:100%;margin-bottom:14px;" oninput="filterCourseList()">
-            <div id="course-list-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;">
+            <div id="course-groups-container">
                 <!-- پر می‌شود -->
             </div>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;border-top:1px solid var(--glass-border);background:#f8fafc;">
-            <div style="font-size:13px;color:var(--text-2);">
+        <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;">
+            <div style="font-size:13px;color:#475569;">
                 <span id="selected-courses-count">۰</span> درس انتخاب‌شده
             </div>
             <div style="display:flex;gap:10px;">
@@ -189,42 +502,21 @@
     </div>
 </div>
 
-<!-- ====== Time Slot Picker Modal (گرافیکی) ====== -->
+<!-- ====== Time Picker Modal ====== -->
 <div id="time-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:0;max-width:1000px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--glass-border);background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.05));">
+    <div class="prefs-modal" style="max-width:1000px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.05));">
             <div>
-                <h3 style="font-size:18px;color:var(--text-1);">📅 انتخاب زمان‌های مطلوب</h3>
-                <p style="font-size:12px;color:var(--text-3);margin-top:4px;">روز و بازه زمانی مورد نظر خود را بصری انتخاب کنید</p>
+                <h3 style="font-size:18px;">📅 انتخاب زمان‌های مطلوب</h3>
+                <p style="font-size:12px;color:#64748b;margin-top:4px;">روز و بازه زمانی مورد نظر خود را بصری انتخاب کنید</p>
             </div>
-            <button onclick="closeTimePicker()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:24px;">✕</button>
+            <button onclick="closeTimePicker()" class="close-btn">✕</button>
         </div>
 
         <div style="padding:20px 28px;overflow-y:auto;flex:1;">
-            <!-- انتخاب ترم و واحد -->
-            <div style="display:flex;gap:14px;margin-bottom:18px;align-items:center;flex-wrap:wrap;">
-                <div>
-                    <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">ترم</label>
-                    <select id="tp-term" class="form-select" style="width:auto;" onchange="loadSlots()">
-                        <option value="mehr">نیمسال اول (مهر)</option>
-                        <option value="bahman">نیمسال دوم (بهمن)</option>
-                        <option value="summer">تابستان</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">تعداد واحد</label>
-                    <select id="tp-units" class="form-select" style="width:auto;" onchange="loadSlots()">
-                        <option value="1">۱ واحد</option>
-                        <option value="2" selected>۲ واحد</option>
-                        <option value="3">۳ واحد</option>
-                        <option value="4">۴ واحد</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- تقویم هفتگی -->
-            <div style="background:#f8fafc;border:1px solid var(--glass-border);border-radius:14px;padding:18px;margin-bottom:18px;">
-                <h4 style="font-size:14px;color:var(--text-1);margin-bottom:10px;">۱. روز هفته را انتخاب کنید</h4>
+            <!-- گام ۱: انتخاب روز -->
+            <div class="weekly-calendar" style="margin-bottom:18px;">
+                <h4 style="font-size:14px;color:#0f172a;margin-bottom:10px;">۱. روز هفته را انتخاب کنید</h4>
                 <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;">
                     <button class="day-btn" data-day="شنبه" onclick="selectDay('شنبه', this)">شنبه</button>
                     <button class="day-btn" data-day="یکشنبه" onclick="selectDay('یکشنبه', this)">یکشنبه</button>
@@ -235,29 +527,47 @@
                 </div>
             </div>
 
-            <!-- اسلات‌های زمانی -->
-            <div id="slots-section" style="display:none;">
-                <div style="background:#f8fafc;border:1px solid var(--glass-border);border-radius:14px;padding:18px;margin-bottom:18px;">
-                    <h4 style="font-size:14px;color:var(--text-1);margin-bottom:4px;">۲. بازه زمانی مورد نظر را انتخاب کنید</h4>
-                    <p id="day-info" style="font-size:12px;color:var(--text-3);margin-bottom:14px;"></p>
-                    <div id="slots-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
-                        <!-- پر می‌شود -->
+            <!-- گام ۲: انتخاب بازه زمانی (سه دسته) -->
+            <div id="periods-section" style="display:none;margin-bottom:18px;">
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px;">
+                    <h4 style="font-size:14px;color:#0f172a;margin-bottom:4px;">۲. بازه زمانی مورد نظر را انتخاب کنید</h4>
+                    <p id="day-info" style="font-size:12px;color:#64748b;margin-bottom:14px;"></p>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+                        <div class="period-card" data-period="morning" onclick="selectPeriod('morning', this)">
+                            <div class="period-check">✓</div>
+                            <div class="period-icon">🌅</div>
+                            <div class="period-title">صبح</div>
+                            <div class="period-desc">از ۷:۳۰ تا ۱۲:۳۰</div>
+                        </div>
+                        <div class="period-card" data-period="noon" onclick="selectPeriod('noon', this)">
+                            <div class="period-check">✓</div>
+                            <div class="period-icon">☀️</div>
+                            <div class="period-title">ظهر</div>
+                            <div class="period-desc">از ۱۳:۰۰ تا ۱۶:۰۰</div>
+                        </div>
+                        <div class="period-card" data-period="afternoon" onclick="selectPeriod('afternoon', this)">
+                            <div class="period-check">✓</div>
+                            <div class="period-icon">🌆</div>
+                            <div class="period-title">بعدازظهر</div>
+                            <div class="period-desc">از ۱۶:۰۰ تا ۲۰:۰۰</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:14px;padding:12px;background:#dbeafe;border-radius:10px;font-size:12px;color:#1e40af;">
+                        💡 انتخاب بازه زمانی به این معناست که شما در تمام آن بازه (مثلاً ۷:۳۰ تا ۱۲:۳۰) آماده تدریس هستید.
                     </div>
                 </div>
             </div>
 
             <!-- انتخاب‌های فعلی -->
             <div id="selections-section">
-                <h4 style="font-size:14px;color:var(--text-1);margin-bottom:10px;">۳. انتخاب‌های فعلی شما</h4>
-                <div id="current-selections" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
-                    <!-- پر می‌شود -->
-                </div>
-                <p id="no-selections" style="color:var(--text-3);font-size:13px;text-align:center;padding:20px;">هنوز هیچ زمانی انتخاب نکرده‌اید</p>
+                <h4 style="font-size:14px;color:#0f172a;margin-bottom:10px;">۳. انتخاب‌های فعلی شما</h4>
+                <div id="current-selections" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;"></div>
+                <p id="no-selections" style="color:#64748b;font-size:13px;text-align:center;padding:20px;">هنوز هیچ زمانی انتخاب نکرده‌اید</p>
             </div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;border-top:1px solid var(--glass-border);background:#f8fafc;">
-            <div style="font-size:13px;color:var(--text-2);">
+        <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;">
+            <div style="font-size:13px;color:#475569;">
                 <span id="selected-slots-count">۰</span> بازه زمانی انتخاب‌شده
             </div>
             <div style="display:flex;gap:10px;">
@@ -268,193 +578,33 @@
     </div>
 </div>
 
-<style>
-.day-btn {
-    padding: 12px 8px;
-    background: white;
-    border: 1.5px solid var(--glass-border);
-    border-radius: 10px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-2);
-    transition: all 0.2s;
-}
-.day-btn:hover {
-    border-color: var(--accent);
-    transform: translateY(-1px);
-}
-.day-btn.active {
-    background: linear-gradient(135deg, #6366f1, #4f46e5);
-    color: white;
-    border-color: transparent;
-    box-shadow: 0 4px 12px rgba(99,102,241,0.3);
-}
-.slot-card {
-    padding: 14px;
-    background: white;
-    border: 1.5px solid var(--glass-border);
-    border-radius: 12px;
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.2s;
-    position: relative;
-}
-.slot-card:hover {
-    border-color: #8b5cf6;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(139,92,246,0.2);
-}
-.slot-card.selected {
-    background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(124,58,237,0.1));
-    border-color: #8b5cf6;
-}
-.slot-card .slot-time {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text-1);
-    direction: ltr;
-    margin-bottom: 4px;
-}
-.slot-card .slot-period {
-    font-size: 11px;
-    color: var(--text-3);
-}
-.slot-card .priority-badge {
-    position: absolute;
-    top: -8px;
-    left: -8px;
-    background: #6366f1;
-    color: white;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-}
-.course-pick-card {
-    padding: 14px;
-    background: white;
-    border: 1.5px solid var(--glass-border);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.course-pick-card:hover {
-    border-color: var(--accent);
-    transform: translateY(-1px);
-}
-.course-pick-card.selected {
-    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(79,70,229,0.05));
-    border-color: var(--accent);
-}
-.course-pick-card .course-check {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-}
-.course-pick-card input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--accent);
-}
-.course-pick-card .course-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-1);
-}
-.course-pick-card .course-meta {
-    font-size: 11px;
-    color: var(--text-3);
-}
-.selection-item {
-    background: white;
-    border: 1px solid var(--glass-border);
-    border-radius: 12px;
-    padding: 12px 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    position: relative;
-}
-.selection-item .priority-circle {
-    width: 28px;
-    height: 28px;
-    background: linear-gradient(135deg, #6366f1, #4f46e5);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 13px;
-    flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(99,102,241,0.3);
-}
-.selection-item .selection-info {
-    flex: 1;
-    font-size: 12px;
-}
-.selection-item .selection-info strong {
-    color: var(--text-1);
-    display: block;
-    direction: ltr;
-    text-align: right;
-}
-.selection-item .selection-info span {
-    color: var(--text-3);
-    font-size: 10px;
-}
-.selection-item .remove-btn {
-    background: #fee2e2;
-    color: #ef4444;
-    border: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.selection-item .remove-btn:hover {
-    background: #ef4444;
-    color: white;
-}
-</style>
-
 <script>
-// ===== State =====
 let allCourses = [];
+let courseGroups = {};
 let selectedCourses = new Set();
 let currentDay = null;
-let allSlots = [];
-let selectedSlots = []; // [{day, slot, start, end, period, period_title}]
+let selectedSlots = [];
 
 const faDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
-function toFa(n) {
-    return String(n).replace(/[0-9]/g, d => faDigits[d]);
-}
+function toFa(n) { return String(n).replace(/[0-9]/g, d => faDigits[d]); }
 
-// ===== تب‌ها =====
+// تعریف بازه‌های زمانی
+const PERIODS = {
+    morning: { title: 'صبح', start: '07:30', end: '12:30' },
+    noon: { title: 'ظهر', start: '13:00', end: '16:00' },
+    afternoon: { title: 'بعدازظهر', start: '16:00', end: '20:00' }
+};
+
 function switchTab(tab) {
     document.getElementById('tab-teaching').style.display = tab === 'teaching' ? 'block' : 'none';
     document.getElementById('tab-time').style.display = tab === 'time' ? 'block' : 'none';
     document.querySelectorAll('.tab-btn').forEach(btn => {
         const isActive = btn.dataset.tab === tab;
-        btn.style.color = isActive ? 'var(--accent)' : 'var(--text-3)';
-        btn.style.borderBottomColor = isActive ? 'var(--accent)' : 'transparent';
+        btn.style.color = isActive ? '#6366f1' : '#64748b';
+        btn.style.borderBottomColor = isActive ? '#6366f1' : 'transparent';
     });
 }
 
-// ===== فیلتر =====
 function filterTeaching() {
     const q = document.getElementById('teaching-search').value.toLowerCase();
     document.querySelectorAll('#tab-teaching tbody tr').forEach(tr => {
@@ -473,20 +623,19 @@ function filterTime() {
 // ===== Course Picker =====
 async function openCoursePicker() {
     document.getElementById('course-picker-modal').style.display = 'flex';
-    if (allCourses.length === 0) {
-        // fetch unique courses
+    selectedCourses.clear();
+    if (Object.keys(courseGroups).length === 0) {
         try {
-            const r = await fetch('/api/courses/unique');
-            if (!r.ok) throw new Error('failed');
+            const r = await fetch('/api/courses/by-group');
             const data = await r.json();
-            allCourses = data.items || data.courses || [];
+            courseGroups = data.groups || {};
+            allCourses = data.items || [];
         } catch (e) {
-            // fallback: empty
+            courseGroups = {};
             allCourses = [];
         }
     }
-    selectedCourses.clear();
-    renderCourseList();
+    renderCourseGroups();
     updateCourseCount();
 }
 
@@ -494,38 +643,65 @@ function closeCoursePicker() {
     document.getElementById('course-picker-modal').style.display = 'none';
 }
 
-function renderCourseList() {
-    const grid = document.getElementById('course-list-grid');
-    if (allCourses.length === 0) {
-        grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:20px;">دروسی برای نمایش وجود ندارد</p>';
+function renderCourseGroups() {
+    const container = document.getElementById('course-groups-container');
+    const groups = Object.keys(courseGroups).sort();
+    if (groups.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:#64748b;padding:20px;">دروسی برای نمایش وجود ندارد</p>';
         return;
     }
-    grid.innerHTML = allCourses.map(c => {
-        const id = c.id || c.unique_code;
-        const title = c.title || c.course_name || '';
-        const code = c.unique_code || c.code || '';
-        const group = c.course_group || c.group || '';
-        const isSelected = selectedCourses.has(id);
+    container.innerHTML = groups.map((g, idx) => {
+        const courses = courseGroups[g] || [];
+        const collapsed = idx > 0 ? 'collapsed' : '';
+        const hidden = idx > 0 ? 'hidden' : '';
         return `
-            <div class="course-pick-card ${isSelected ? 'selected' : ''}" data-id="${id}" data-title="${title}" onclick="toggleCourse(${id})">
-                <div class="course-check">
-                    <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCourse(${id})">
-                    <div class="course-title">${title}</div>
+            <div class="course-group-section">
+                <div class="course-group-header ${collapsed}" onclick="toggleGroup(this)">
+                    <span>📁 ${g} (${courses.length} درس)</span>
+                    <span class="toggle-icon">▼</span>
                 </div>
-                <div class="course-meta">
-                    ${code ? `<code>${code}</code>` : ''}
-                    ${group ? ` • ${group}` : ''}
+                <div class="course-group-items ${hidden}">
+                    ${courses.map(c => {
+                        const id = c.id || c.unique_code;
+                        const title = c.title || c.course_name || '';
+                        const code = c.unique_code || c.code || '';
+                        const isSelected = selectedCourses.has(id);
+                        return `
+                            <div class="course-pick-card ${isSelected ? 'selected' : ''}" data-id="${id}" data-title="${title}" data-group="${g}" onclick="toggleCourse(${id})">
+                                <div class="course-check">
+                                    <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCourse(${id})">
+                                    <div>
+                                        <div class="course-title">${title}</div>
+                                        <div class="course-meta">${code ? `<code>${code}</code>` : ''}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;
     }).join('');
 }
 
+function toggleGroup(header) {
+    const items = header.nextElementSibling;
+    header.classList.toggle('collapsed');
+    items.classList.toggle('hidden');
+}
+
 function filterCourseList() {
     const q = document.getElementById('course-search-input').value.toLowerCase();
     document.querySelectorAll('.course-pick-card').forEach(card => {
         const text = (card.dataset.title || '').toLowerCase();
-        card.style.display = text.includes(q) ? '' : 'none';
+        const group = (card.dataset.group || '').toLowerCase();
+        const match = !q || text.includes(q) || group.includes(q);
+        card.style.display = match ? '' : 'none';
+    });
+    // همچنین گروه‌هایی که هیچ موردی ندارند را پنهان کن
+    document.querySelectorAll('.course-group-section').forEach(section => {
+        const visible = section.querySelectorAll('.course-pick-card:not([style*="display: none"])').length;
+        section.style.display = visible > 0 ? '' : 'none';
     });
 }
 
@@ -535,7 +711,6 @@ function toggleCourse(id) {
     } else {
         selectedCourses.add(id);
     }
-    // re-render
     const card = document.querySelector(`.course-pick-card[data-id="${id}"]`);
     if (card) {
         card.classList.toggle('selected');
@@ -554,7 +729,6 @@ async function submitCoursePicker() {
         alert('لطفاً حداقل یک درس انتخاب کنید');
         return;
     }
-    // get admin user info
     const admin = {{ admin | tojson }};
     const instructorName = admin.full_name || admin.username;
     const instructorUsername = admin.username;
@@ -595,13 +769,14 @@ async function submitCoursePicker() {
     }
 }
 
-// ===== Time Slot Picker =====
+// ===== Time Picker =====
 async function openTimePicker() {
     document.getElementById('time-picker-modal').style.display = 'flex';
     selectedSlots = [];
     currentDay = null;
     document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('slots-section').style.display = 'none';
+    document.querySelectorAll('.period-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('periods-section').style.display = 'none';
     renderSelections();
 }
 
@@ -613,74 +788,38 @@ function selectDay(day, btn) {
     document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentDay = day;
-    document.getElementById('slots-section').style.display = 'block';
-    document.getElementById('day-info').textContent = `روز ${day} — بازه‌های معتبر برای ترم و واحد انتخاب‌شده:`;
-    loadSlots();
+    document.getElementById('periods-section').style.display = 'block';
+    document.getElementById('day-info').textContent = `روز ${day} — یکی از بازه‌های زیر را انتخاب کنید`;
+    // reset period selection
+    document.querySelectorAll('.period-card').forEach(c => c.classList.remove('selected'));
 }
 
-async function loadSlots() {
-    const term = document.getElementById('tp-term').value;
-    const units = document.getElementById('tp-units').value;
-    const grid = document.getElementById('slots-grid');
-    grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:10px;">در حال بارگذاری...</p>';
-    try {
-        const r = await fetch(`/api/slot-times/search?term=${term}&units=${units}`);
-        const data = await r.json();
-        const slots = data.slots || [];
-        allSlots = slots;
-        if (slots.length === 0) {
-            grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:10px;">اسلاتی یافت نشد</p>';
-            return;
-        }
-        grid.innerHTML = slots.map(s => {
-            // check if already selected for this day
-            const alreadySelected = selectedSlots.find(x => x.day === currentDay && x.slot === s.slot);
-            return `
-                <div class="slot-card ${alreadySelected ? 'selected' : ''}" data-slot="${s.slot}" data-start="${s.start}" data-end="${s.end}" data-period="${s.period}" data-period-title="${s.period_title}" onclick="toggleSlot(this)">
-                    ${alreadySelected ? `<div class="priority-badge">${toFa(alreadySelected.priority)}</div>` : ''}
-                    <div class="slot-time">${s.start} - ${s.end}</div>
-                    <div class="slot-period">${s.period_title}</div>
-                </div>
-            `;
-        }).join('');
-    } catch (e) {
-        grid.innerHTML = `<p style="grid-column:1/-1;text-align:center;color:var(--danger);padding:10px;">خطا: ${e.message}</p>`;
-    }
-}
-
-function toggleSlot(card) {
+function selectPeriod(period, card) {
     if (!currentDay) {
         alert('ابتدا یک روز انتخاب کنید');
         return;
     }
-    const slot = card.dataset.slot;
-    const start = card.dataset.start;
-    const end = card.dataset.end;
-    const period = card.dataset.period;
-    const periodTitle = card.dataset.periodTitle;
-
-    // check if already selected
-    const existingIdx = selectedSlots.findIndex(x => x.day === currentDay && x.slot === slot);
+    const periodInfo = PERIODS[period];
+    // check if already selected for this day + period
+    const existingIdx = selectedSlots.findIndex(x => x.day === currentDay && x.period === period);
     if (existingIdx >= 0) {
         // remove
         selectedSlots.splice(existingIdx, 1);
+        card.classList.remove('selected');
     } else {
-        // add — priority = count + 1
+        // add
         selectedSlots.push({
             day: currentDay,
-            slot: slot,
-            start_time: start,
-            end_time: end,
             period: period,
-            period_title: periodTitle,
+            period_title: periodInfo.title,
+            start_time: periodInfo.start,
+            end_time: periodInfo.end,
             priority: selectedSlots.length + 1,
         });
+        card.classList.add('selected');
     }
     // re-number priorities
     selectedSlots.forEach((s, i) => s.priority = i + 1);
-
-    // refresh slot display
-    loadSlots();
     renderSelections();
 }
 
@@ -697,7 +836,6 @@ function renderSelections() {
     }
     emptyMsg.style.display = 'none';
 
-    // group by day
     const byDay = {};
     selectedSlots.forEach(s => {
         if (!byDay[s.day]) byDay[s.day] = [];
@@ -706,8 +844,8 @@ function renderSelections() {
 
     let html = '';
     for (const [day, items] of Object.entries(byDay)) {
-        html += `<div style="grid-column:1/-1;background:#f1f5f9;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;">${day}</div>`;
-        items.forEach((s, idx) => {
+        html += `<div style="grid-column:1/-1;background:#f1f5f9;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;color:#1e293b;margin-bottom:6px;">${day}</div>`;
+        items.forEach(s => {
             const realIdx = selectedSlots.indexOf(s);
             html += `
                 <div class="selection-item">
@@ -727,7 +865,10 @@ function renderSelections() {
 function removeSelection(idx) {
     selectedSlots.splice(idx, 1);
     selectedSlots.forEach((s, i) => s.priority = i + 1);
-    loadSlots();
+    // اگر هیچ انتخابی برای currentDay باقی نماند، deselect همه period cards
+    if (!selectedSlots.find(s => s.day === currentDay)) {
+        document.querySelectorAll('.period-card').forEach(c => c.classList.remove('selected'));
+    }
     renderSelections();
 }
 
@@ -767,13 +908,12 @@ async function submitTimePicker() {
     }
 }
 
-// ===== Old edit/delete (نسخه ساده) =====
+// ===== edit/delete =====
 async function editTeaching(id) {
-    // simple prompt-based edit
     const items = await (await fetch('/api/teaching-preferences')).json();
     const item = items.items.find(i => i.id === id);
     if (!item) return;
-    const newStatus = prompt('وضعیت جدید را وارد کنید (pending/approved/rejected):', item.status || 'pending');
+    const newStatus = prompt('وضعیت جدید (pending/approved/rejected):', item.status || 'pending');
     if (newStatus === null) return;
     const r = await fetch(`/api/teaching-preferences/${id}`, {
         method: 'PUT',
@@ -809,7 +949,6 @@ async function deleteTime(id) {
     if ((await r.json()).ok) location.reload();
 }
 
-// ===== آپلود اکسل =====
 async function uploadTeachingExcel(input) {
     if (!input.files[0]) return;
     const fd = new FormData();
@@ -832,4 +971,5 @@ async function uploadTimeExcel(input) {
     input.value = '';
 }
 </script>
+</div>
 {% endblock %}

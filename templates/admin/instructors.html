@@ -2,6 +2,41 @@
 {% block title %}اساتید{% endblock %}
 
 {% block content %}
+<style>
+    /* اصلاح رنگ متن — همه متن‌ها تیره روی پس‌زمینه روشن */
+    .inst-page { color: #1e293b; }
+    .inst-page h1, .inst-page h2, .inst-page h3 { color: #0f172a; }
+    .inst-page .form-label { color: #334155; font-weight: 600; }
+    .inst-page .form-input, .inst-page .form-select {
+        background: #ffffff; color: #0f172a;
+        border: 1.5px solid #cbd5e1;
+    }
+    .inst-page .form-input:focus, .inst-page .form-select:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
+    }
+    .inst-page .card { background: #ffffff; color: #1e293b; }
+    .inst-page .table { color: #1e293b; }
+    .inst-page .table th { color: #475569; background: #f8fafc; }
+    .inst-page .table td { color: #1e293b; }
+    .inst-page .stat-card { color: #1e293b; }
+    .inst-page .stat-label { color: #64748b; }
+    .inst-page .stat-value { color: #0f172a; }
+    .inst-page .modal-content {
+        background: #ffffff; color: #1e293b;
+        border: 1px solid #e2e8f0;
+        border-radius: 24px;
+    }
+    .inst-page .modal-content h3, .inst-page .modal-content h4 { color: #0f172a; }
+    .inst-page .modal-content .close-btn { color: #64748b; background: none; border: none; cursor: pointer; font-size: 22px; }
+    .inst-page .modal-content .close-btn:hover { color: #ef4444; }
+    .inst-page .alert { color: #1e293b; }
+    .inst-page .badge-success { background: #dcfce7; color: #166534; }
+    .inst-page .badge-danger { background: #fee2e2; color: #991b1b; }
+    .inst-page .badge-info { background: #dbeafe; color: #1e40af; }
+    .inst-page .breadcrumb { color: #64748b; }
+</style>
+<div class="inst-page">
 <div class="admin-header">
     <div>
         <h1>👨‍🏫 اساتید</h1>
@@ -13,6 +48,9 @@
         </button>
         <button onclick="openSyncModal()" class="btn btn-ghost btn-sm">
             🔄 همگام‌سازی
+        </button>
+        <button onclick="syncToUsers()" class="btn btn-ghost btn-sm" style="color:#10b981;border-color:#10b981;">
+            👥 افزودن به کاربران
         </button>
         <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
             📤 بارگذاری اکسل
@@ -57,10 +95,10 @@
     <select id="coop-filter" class="form-select" style="width:auto;" onchange="filterTable()">
         <option value="">همه انواع همکاری</option>
         <option value="هیئت علمی" {% if cooperation_type == 'هیئت علمی' %}selected{% endif %}>هیئت علمی</option>
-        <option value="تمام‌وقت" {% if cooperation_type == 'تمام‌وقت' %}selected{% endif %}>تمام‌وقت</option>
-        <option value="نیم‌وقت" {% if cooperation_type == 'نیم‌وقت' %}selected{% endif %}>نیم‌وقت</option>
-        <option value="ساعتی" {% if cooperation_type == 'ساعتی' %}selected{% endif %}>ساعتی</option>
-        <option value="مهمان" {% if cooperation_type == 'مهمان' %}selected{% endif %}>مهمان</option>
+        <option value="دستیارآموزشی" {% if cooperation_type == 'دستیارآموزشی' %}selected{% endif %}>دستیارآموزشی</option>
+        <option value="هیئت علمی وابسته" {% if cooperation_type == 'هیئت علمی وابسته' %}selected{% endif %}>هیئت علمی وابسته</option>
+        <option value="حق التدریس" {% if cooperation_type == 'حق التدریس' %}selected{% endif %}>حق التدریس</option>
+        <option value="سایر" {% if cooperation_type == 'سایر' %}selected{% endif %}>سایر</option>
     </select>
     <span style="font-size:12px;color:var(--text-3);">تعداد نتایج: <strong id="result-count">{{ instructors|length }}</strong></span>
 </div>
@@ -163,11 +201,10 @@
                     <select id="i-cooperation_type" name="cooperation_type" class="form-select">
                         <option value="">انتخاب کنید...</option>
                         <option value="هیئت علمی">هیئت علمی</option>
-                        <option value="تمام‌وقت">تمام‌وقت</option>
-                        <option value="نیم‌وقت">نیم‌وقت</option>
-                        <option value="ساعتی">ساعتی</option>
-                        <option value="مهمان">مهمان</option>
-                        <option value="قراردادی">قراردادی</option>
+                        <option value="دستیارآموزشی">دستیارآموزشی</option>
+                        <option value="هیئت علمی وابسته">هیئت علمی وابسته</option>
+                        <option value="حق التدریس">حق التدریس</option>
+                        <option value="سایر">سایر</option>
                     </select>
                 </div>
                 <div>
@@ -401,6 +438,28 @@ async function runSyncNow() {
     } finally {
         btn.disabled = false;
         btn.textContent = origText;
+    }
+}
+
+// همگام‌سازی اساتید به جدول authorized_users
+async function syncToUsers() {
+    const password = prompt('رمز عبور پیش‌فرض برای اساتید (برای ورود):', 'Instructor@1405');
+    if (password === null) return;
+    if (!confirm('آیا از افزودن اساتید به جدول کاربران مطمئن هستید؟\nنام کاربری و رمز یکسان خواهند بود.')) return;
+    try {
+        const r = await fetch('/api/instructors/sync-to-users', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: password})
+        });
+        const res = await r.json();
+        if (res.ok) {
+            alert(res.message);
+        } else {
+            alert('خطا: ' + (res.message || res.error || 'نامشخص'));
+        }
+    } catch (e) {
+        alert('خطا: ' + e.message);
     }
 }
 </script>

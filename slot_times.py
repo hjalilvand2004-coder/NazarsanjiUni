@@ -275,7 +275,13 @@ def is_valid_slot(start_time, end_time, term="mehr", units=2):
 
 
 def get_period_for_time(start_time):
-    """تعیین گروه زمانی بر اساس ساعت شروع (دقیقه)."""
+    """تعیین گروه زمانی بر اساس ساعت شروع (دقیقه).
+
+    سه دسته (مطابق درخواست کاربر):
+    - صبح (morning): 7:30 تا 12:30
+    - ظهر (noon): 13:00 تا 16:00
+    - بعدازظهر (afternoon): 16:00 تا 20:00
+    """
     if not start_time:
         return "morning", "صبح"
     try:
@@ -283,11 +289,55 @@ def get_period_for_time(start_time):
         hour = int(parts[0])
         minute = int(parts[1]) if len(parts) > 1 else 0
         total = hour * 60 + minute
-        if total < 12 * 60:  # قبل از 12:00
+        # صبح: 7:30 (450) تا 12:30 (750)
+        if 450 <= total <= 750:
             return "morning", "صبح"
-        elif total < 17 * 60:  # 12:00 تا 17:00
+        # ظهر: 13:00 (780) تا 16:00 (960)
+        elif 780 <= total < 960:
+            return "noon", "ظهر"
+        # بعدازظهر: 16:00 (960) تا 20:00 (1200)
+        elif 960 <= total <= 1200:
             return "afternoon", "بعدازظهر"
         else:
-            return "evening", "عصر"
+            # خارج از بازه‌ها — پیش‌فرض صبح
+            return "morning", "صبح"
     except Exception:
         return "morning", "صبح"
+
+
+# ==================================================
+# بازه‌های زمانی بزرگ (سه دسته)
+# ==================================================
+
+# سه دسته بازه زمانی (مطابق درخواست کاربر)
+TIME_PERIODS = {
+    "morning": {
+        "title": "صبح",
+        "title_fa": "صبح",
+        "start": "07:30",
+        "end": "12:30",
+        "icon": "🌅",
+        "description": "از ۷:۳۰ تا ۱۲:۳۰",
+    },
+    "noon": {
+        "title": "ظهر",
+        "title_fa": "ظهر",
+        "start": "13:00",
+        "end": "16:00",
+        "icon": "☀️",
+        "description": "از ۱۳:۰۰ تا ۱۶:۰۰",
+    },
+    "afternoon": {
+        "title": "بعدازظهر",
+        "title_fa": "بعدازظهر",
+        "start": "16:00",
+        "end": "20:00",
+        "icon": "🌆",
+        "description": "از ۱۶:۰۰ تا ۲۰:۰۰",
+    },
+}
+
+
+def get_time_periods():
+    """گرفتن لیست سه بازه زمانی بزرگ."""
+    return {"periods": list(TIME_PERIODS.values())}

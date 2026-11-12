@@ -1,15 +1,14 @@
 """
-instructors.py — ماژول مدیریت اساتید
+instructors.py — ماژول مدیریت اساتید (v3.11.0)
 ================================================================
-- جدول instructors با مشخصات کامل (نام، نوع همکاری، تلفن، ...)
-- سرویس واکشی از سامانه برنامه‌ریزی (پورت 8083)
-- CRUD کامل
-- آپلود اکسل
-- پیش‌فرض اساتید با نام کاربری/تلفن/پسورد
+- جدول instructors با فیلدهای: ردیف، کد، نام، نام کاربری، گروه، نوع همکاری
+- نوع همکاری: هیات علمی، دستیارآموزشی، هیات علمی وابسته، حق التدریس
+- سرویس واکشی از سامانه برنامه‌ریزی (پورت 8083) — با access_token bearer
+- CRUD کامل + آپلود اکسل + پیش‌فرض
+- همگام‌سازی اساتید به authorized_users (با نام کاربری/رمز یکسان)
 
 مهم:
-- جدول جدید با CREATE TABLE IF NOT EXISTS ساخته می‌شود (additive)
-- هیچ تغییری در جداول موجود داده نمی‌شود
+- کاملاً additive — هیچ تغییری در جداول موجود داده نمی‌شود.
 """
 
 import os
@@ -33,6 +32,14 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTRUCTORS_SYNC_FILE = os.path.join(BASE_DIR, "instructors_sync.json")
 
+# انواع همکاری معتبر (مطابق درخواست کاربر)
+COOPERATION_TYPES = [
+    "هیات علمی",
+    "دستیارآموزشی",
+    "هیات علمی وابسته",
+    "حق التدریس",
+]
+
 # ==================================================
 # Migration: ساخت جدول instructors
 # ==================================================
@@ -40,7 +47,7 @@ INSTRUCTORS_SYNC_FILE = os.path.join(BASE_DIR, "instructors_sync.json")
 def ensure_instructors_table(db):
     """
     ساخت جدول instructors در صورت عدم وجود.
-    کاملاً additive — هیچ تغییری در جداول موجود.
+    کاملاً additive.
     """
     with db.get_connection() as conn:
         cursor = conn.cursor()
@@ -48,10 +55,9 @@ def ensure_instructors_table(db):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS instructors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                row_number INTEGER,
                 code TEXT UNIQUE,
                 username TEXT,
-                first_name TEXT,
-                last_name TEXT,
                 full_name TEXT,
                 phone TEXT,
                 email TEXT,
@@ -73,7 +79,7 @@ def ensure_instructors_table(db):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_username ON instructors(username)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_phone ON instructors(phone)")
 
-        # افزودن ستون role به authorized_users (اگر وجود ندارد)
+        # افزودن ستون user_type به authorized_users (اگر وجود ندارد)
         try:
             cursor.execute("ALTER TABLE authorized_users ADD COLUMN user_type TEXT DEFAULT 'student'")
         except Exception:
@@ -91,8 +97,8 @@ def ensure_instructors_table(db):
 DEFAULT_SYNC_SETTINGS = {
     "enabled": False,
     "service_url": "http://188.212.96.235:8083",
-    "username": "",
-    "password": "",
+    "username": "admin",
+    "password": "admin123",
     "auto_sync": False,
     "sync_interval_minutes": 60,
     "last_sync_at": "",
@@ -101,7 +107,6 @@ DEFAULT_SYNC_SETTINGS = {
 
 
 def load_sync_settings() -> Dict[str, Any]:
-    """بارگذاری تنظیمات سرویس واکشی."""
     data = {}
     if os.path.exists(INSTRUCTORS_SYNC_FILE):
         try:
@@ -116,7 +121,6 @@ def load_sync_settings() -> Dict[str, Any]:
 
 
 def save_sync_settings(settings: Dict[str, Any]) -> bool:
-    """ذخیره تنظیمات سرویس واکشی."""
     try:
         with open(INSTRUCTORS_SYNC_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, ensure_ascii=False, indent=2)
@@ -131,17 +135,16 @@ def save_sync_settings(settings: Dict[str, Any]) -> bool:
 # ==================================================
 
 def get_all_instructors(db, search: str = "", cooperation_type: str = "") -> List[Dict[str, Any]]:
-    """گرفتن همه اساتید با فیلتر اختیاری."""
-    query = "SELECT * FROM instructors WHERE 1=1"
+    query = 'SELECT * FROM instructors WHERE 1=1'
     params = []
     if search:
-        query += " AND (full_name LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR code LIKE ? OR username LIKE ? OR phone LIKE ?)"
+        query += ' AND (full_name LIKE ? OR code LIKE ? OR username LIKE ? OR phone LIKE ?)'
         like = f"%{search}%"
-        params.extend([like, like, like, like, like, like])
+        params.extend([like, like, like, like])
     if cooperation_type:
-        query += " AND cooperation_type = ?"
+        query += ' AND cooperation_type = ?'
         params.append(cooperation_type)
-    query += " ORDER BY id DESC"
+    query += ' ORDER BY row_number, id DESC'
     rows = db.execute_query(query, tuple(params))
     if rows is None:
         return []
@@ -149,42 +152,36 @@ def get_all_instructors(db, search: str = "", cooperation_type: str = "") -> Lis
 
 
 def get_instructor_by_id(db, instructor_id: int) -> Optional[Dict[str, Any]]:
-    """گرفتن استاد با id."""
     rows = db.execute_query("SELECT * FROM instructors WHERE id = ?", (instructor_id,))
     if not rows:
         return None
     return dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
 
 
-def get_instructor_by_username(db, username: str) -> Optional[Dict[str, Any]]:
-    """گرفتن استاد با username."""
-    rows = db.execute_query("SELECT * FROM instructors WHERE username = ?", (username,))
-    if not rows:
-        return None
-    return dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
-
-
 def create_instructor(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional[str]]:
-    """ساخت استاد جدید."""
     from src.database import hash_password
     password = data.get("password", "")
     password_hash = hash_password(password) if password else None
 
-    query = """
+    full_name = (data.get("full_name") or "").strip()
+    if not full_name:
+        first = (data.get("first_name") or "").strip()
+        last = (data.get("last_name") or "").strip()
+        full_name = f"{first} {last}".strip()
+    if not full_name:
+        full_name = data.get("name", "").strip()
+
+    query = '''
         INSERT INTO instructors
-            (code, username, first_name, last_name, full_name, phone, email,
+            (row_number, code, username, full_name, phone, email,
              "group", cooperation_type, max_teaching_units, role, is_active,
              password_hash, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """
-    first_name = (data.get("first_name") or "").strip()
-    last_name = (data.get("last_name") or "").strip()
-    full_name = data.get("full_name") or f"{first_name} {last_name}".strip()
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    '''
     params = (
+        int(data.get("row_number") or 0),
         data.get("code", ""),
         data.get("username", ""),
-        first_name,
-        last_name,
         full_name,
         data.get("phone", ""),
         data.get("email", ""),
@@ -206,7 +203,6 @@ def create_instructor(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional
 
 
 def update_instructor(db, instructor_id: int, data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
-    """ویرایش استاد."""
     existing = db.execute_query("SELECT id FROM instructors WHERE id = ?", (instructor_id,))
     if not existing:
         return False, "استاد پیدا نشد"
@@ -214,28 +210,28 @@ def update_instructor(db, instructor_id: int, data: Dict[str, Any]) -> Tuple[boo
     from src.database import hash_password
     password = data.get("password")
     password_hash_clause = ""
-    params = []
+    extra_params = []
     if password:
         password_hash_clause = ", password_hash = ?"
-        params.append(hash_password(password))
+        extra_params.append(hash_password(password))
 
-    first_name = (data.get("first_name") or "").strip()
-    last_name = (data.get("last_name") or "").strip()
-    full_name = data.get("full_name") or f"{first_name} {last_name}".strip()
+    full_name = (data.get("full_name") or "").strip()
+    if not full_name:
+        full_name = data.get("name", "").strip()
 
-    query = f"""
+    query = f'''
         UPDATE instructors SET
-            code = ?, username = ?, first_name = ?, last_name = ?, full_name = ?,
+            row_number = ?, code = ?, username = ?, full_name = ?,
             phone = ?, email = ?, "group" = ?, cooperation_type = ?,
-            max_teaching_units = ?, role = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+            max_teaching_units = ?, role = ?, is_active = ?,
+            updated_at = CURRENT_TIMESTAMP
             {password_hash_clause}
         WHERE id = ?
-    """
+    '''
     params = [
+        int(data.get("row_number") or 0),
         data.get("code", ""),
         data.get("username", ""),
-        first_name,
-        last_name,
         full_name,
         data.get("phone", ""),
         data.get("email", ""),
@@ -244,14 +240,13 @@ def update_instructor(db, instructor_id: int, data: Dict[str, Any]) -> Tuple[boo
         int(data.get("max_teaching_units") or 0),
         data.get("role", "instructor"),
         1 if data.get("is_active", True) else 0,
-    ] + params + [instructor_id]
+    ] + extra_params + [instructor_id]
 
     result = db.execute_query(query, tuple(params))
     return (result is not None), None
 
 
 def delete_instructor(db, instructor_id: int) -> Tuple[bool, Optional[str]]:
-    """حذف استاد."""
     existing = db.execute_query("SELECT id FROM instructors WHERE id = ?", (instructor_id,))
     if not existing:
         return False, "استاد پیدا نشد"
@@ -263,81 +258,92 @@ def delete_instructor(db, instructor_id: int) -> Tuple[bool, Optional[str]]:
 # سرویس واکشی از سامانه برنامه‌ریزی (8083)
 # ==================================================
 
+def _login_to_remote(service_url: str, username: str, password: str) -> Tuple[Optional[str], Optional[str]]:
+    """ورود به سامانه برنامه‌ریزی و گرفتن access_token."""
+    base = service_url.rstrip("/")
+    try:
+        if requests is None:
+            return None, "کتابخانه requests نصب نیست"
+        resp = requests.post(
+            f"{base}/api/auth/login",
+            json={"username": username, "password": password},
+            timeout=15,
+            headers={"Content-Type": "application/json"},
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("access_token") or data.get("token"), None
+        else:
+            try:
+                detail = resp.json().get("detail", "")
+            except Exception:
+                detail = resp.text[:200]
+            return None, f"خطا در ورود (HTTP {resp.status_code}): {detail}"
+    except Exception as e:
+        return None, f"ارتباط با سرویس ناموفق: {e}"
+
+
 def fetch_instructors_from_remote(service_url: str, username: str = "", password: str = "") -> Tuple[Optional[List[Dict]], Optional[str]]:
-    """
-    واکشی اساتید از سامانه برنامه‌ریزی (پورت 8083).
-    برمی‌گرداند: (list_of_instructors, error)
-    """
+    """واکشی اساتید از سامانه برنامه‌ریزی."""
     if not service_url:
         return None, "service_url_not_configured"
 
     base = service_url.rstrip("/")
 
-    try:
-        if requests is None:
-            return None, "کتابخانه requests نصب نیست"
+    # ۱) تلاش برای ورود
+    auth_token = None
+    if username and password:
+        auth_token, err = _login_to_remote(base, username, password)
+        if err:
+            logger.warning(f"login failed: {err}")
+            # ادامه با حالت بدون auth
+        else:
+            logger.info("✓ ورود به سامانه برنامه‌ریزی موفق")
+    else:
+        return None, "نام کاربری و رمز عبور سرویس تنظیم نشده است"
 
-        # تلاش برای ورود
-        auth_token = None
-        if username and password:
-            try:
-                login_resp = requests.post(
-                    f"{base}/api/auth/login",
-                    json={"username": username, "password": password},
-                    timeout=15,
-                )
-                if login_resp.status_code == 200:
-                    login_data = login_resp.json()
-                    auth_token = login_data.get("access_token") or login_data.get("token")
-            except Exception as e:
-                logger.warning(f"login failed: {e}")
+    headers = {}
+    if auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}"
 
-        headers = {}
-        if auth_token:
-            headers["Authorization"] = f"Bearer {auth_token}"
+    # ۲) واکشی اساتید
+    endpoints_to_try = [
+        "/api/professors-rooms/instructors/list",
+        "/api/professors-rooms/instructors",
+        "/api/courses/instructors",
+    ]
+    last_err = None
+    for ep in endpoints_to_try:
+        try:
+            resp = requests.get(f"{base}{ep}", headers=headers, timeout=20)
+            if resp.status_code == 200:
+                data = resp.json()
+                # می‌تواند list یا dict با key باشد
+                if isinstance(data, list):
+                    return data, None
+                elif isinstance(data, dict):
+                    for key in ("items", "data", "instructors", "results"):
+                        if key in data and isinstance(data[key], list):
+                            return data[key], None
+                    return [data], None
+            elif resp.status_code == 401:
+                last_err = "احراز هویت ناموفق بود — توکن نامعتبر است"
+            else:
+                last_err = f"HTTP {resp.status_code}"
+        except Exception as e:
+            last_err = str(e)
+            continue
 
-        # تلاش برای endpoint اساتید
-        endpoints_to_try = [
-            "/api/professors-rooms/instructors/list",
-            "/api/professors-rooms/instructors",
-            "/api/courses/instructors",
-        ]
-        last_err = None
-        for ep in endpoints_to_try:
-            try:
-                resp = requests.get(f"{base}{ep}", headers=headers, timeout=15)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # می‌تواند list یا dict با key باشد
-                    if isinstance(data, list):
-                        return data, None
-                    elif isinstance(data, dict):
-                        # حالت‌های رایج
-                        for key in ("items", "data", "instructors", "results"):
-                            if key in data and isinstance(data[key], list):
-                                return data[key], None
-                        return [data], None
-                else:
-                    last_err = f"HTTP {resp.status_code}"
-            except Exception as e:
-                last_err = str(e)
-                continue
-
-        return None, last_err or "همه endpointها ناموفق بودند"
-
-    except Exception as e:
-        return None, f"ارتباط با سرویس ناموفق: {e}"
+    return None, last_err or "همه endpointها ناموفق بودند"
 
 
 def sync_instructors_from_remote(db, settings: Dict[str, Any] = None) -> Dict[str, Any]:
-    """
-    همگام‌سازی اساتید از سامانه برنامه‌ریزی.
-    """
+    """همگام‌سازی اساتید از سامانه برنامه‌ریزی."""
     if settings is None:
         settings = load_sync_settings()
 
     if not settings.get("enabled"):
-        return {"ok": False, "error": "sync_disabled", "message": "همگام‌سازی غیرفعال است."}
+        return {"ok": False, "error": "sync_disabled", "message": "همگام‌سازی غیرفعال است. ابتدا آن را فعال کنید."}
 
     remote_data, err = fetch_instructors_from_remote(
         service_url=settings.get("service_url", ""),
@@ -350,25 +356,25 @@ def sync_instructors_from_remote(db, settings: Dict[str, Any] = None) -> Dict[st
                 "message": f"خطا در واکشی از سامانه برنامه‌ریزی: {err}"}
 
     synced_count = 0
+    updated_count = 0
     errors = []
     for item in (remote_data or []):
         try:
             code = str(item.get("code") or item.get("instructor_code") or item.get("id") or "")
-            full_name = (item.get("full_name") or item.get("name") or
+            full_name = (item.get("name") or item.get("full_name") or
                          f"{item.get('first_name', '')} {item.get('last_name', '')}".strip())
             if not code and not full_name:
                 continue
 
             data = {
+                "row_number": int(item.get("row_number") or 0),
                 "code": code,
-                "username": item.get("username") or code,
-                "first_name": item.get("first_name", ""),
-                "last_name": item.get("last_name", ""),
+                "username": (item.get("username") or "").lstrip("@") or code,
                 "full_name": full_name,
                 "phone": item.get("phone") or item.get("mobile") or "",
                 "email": item.get("email", ""),
                 "group": item.get("group") or item.get("expert_group", ""),
-                "cooperation_type": item.get("cooperation_type") or item.get("coop_type", ""),
+                "cooperation_type": item.get("cooperation_type") or "",
                 "max_teaching_units": int(item.get("max_teaching_units") or 0),
                 "is_active": True,
                 "source": "remote",
@@ -380,6 +386,7 @@ def sync_instructors_from_remote(db, settings: Dict[str, Any] = None) -> Dict[st
             if existing:
                 eid = existing[0]["id"] if isinstance(existing[0], dict) else existing[0][0]
                 update_instructor(db, eid, data)
+                updated_count += 1
             else:
                 create_instructor(db, data)
             synced_count += 1
@@ -394,8 +401,10 @@ def sync_instructors_from_remote(db, settings: Dict[str, Any] = None) -> Dict[st
     return {
         "ok": True,
         "synced": synced_count,
+        "updated": updated_count,
+        "new": synced_count - updated_count,
         "errors": errors[:5],
-        "message": f"{synced_count} استاد همگام‌سازی شد.",
+        "message": f"{synced_count} استاد همگام‌سازی شد ({updated_count} به‌روز، {synced_count - updated_count} جدید).",
     }
 
 
@@ -404,11 +413,13 @@ def sync_instructors_from_remote(db, settings: Dict[str, Any] = None) -> Dict[st
 # ==================================================
 
 EXCEL_MAP = {
+    "ردیف": "row_number",
+    "کد": "code",
     "کد استاد": "code",
-    "نام": "first_name",
-    "نام خانوادگی": "last_name",
     "نام و نام خانوادگی": "full_name",
+    "نام": "full_name",
     "نام کاربری": "username",
+    "تلفن": "phone",
     "شماره تلفن": "phone",
     "تلفن همراه": "phone",
     "ایمیل": "email",
@@ -423,7 +434,6 @@ EXCEL_MAP = {
 
 
 def import_instructors_excel(db, file_path: str) -> Dict[str, Any]:
-    """آپلود اکسل اساتید."""
     try:
         import pandas as pd
     except ImportError:
@@ -437,7 +447,7 @@ def import_instructors_excel(db, file_path: str) -> Dict[str, Any]:
     df.columns = [str(c).strip().replace("  ", " ").replace("\u200c", "") for c in df.columns]
     logger.info(f"ستون‌های شناسایی‌شده: {list(df.columns)}")
 
-    required = ["نام و نام خانوادگی"]
+    # بررسی ستون‌های ضروری
     if not any(c in df.columns for c in ["نام و نام خانوادگی", "نام"]):
         return {"ok": False, "count": 0,
                 "errors": ["ستون‌های ضروری وجود ندارند: نام یا نام و نام خانوادگی"]}
@@ -453,7 +463,7 @@ def import_instructors_excel(db, file_path: str) -> Dict[str, Any]:
                     val = None
                 else:
                     val = str(val).strip()
-                    if en_name in ("max_teaching_units",) and val and val.replace(".", "").isdigit():
+                    if en_name in ("row_number", "max_teaching_units") and val and val.replace(".", "").isdigit():
                         try:
                             val = int(float(val))
                         except Exception:
@@ -463,16 +473,15 @@ def import_instructors_excel(db, file_path: str) -> Dict[str, Any]:
                         val = val_lower in ("true", "1", "yes", "فعال")
                 row_dict[en_name] = val
 
-        full_name = row_dict.get("full_name") or (
-            f"{row_dict.get('first_name', '')} {row_dict.get('last_name', '')}".strip()
-        )
+        full_name = row_dict.get("full_name") or row_dict.get("name") or ""
         if not full_name:
             errors.append(f"ردیف {idx + 2}: نام خالی است")
             continue
 
-        row_dict["full_name"] = full_name
         if not row_dict.get("code"):
             row_dict["code"] = row_dict.get("username") or full_name
+        if not row_dict.get("username"):
+            row_dict["username"] = row_dict.get("code")
 
         # اگر code تکراری بود، update کن
         existing = db.execute_query(
@@ -499,55 +508,92 @@ def import_instructors_excel(db, file_path: str) -> Dict[str, Any]:
 
 
 # ==================================================
-# پیش‌فرض اساتید با نام کاربری/تلفن/پسورد
+# همگام‌سازی اساتید به authorized_users
+# ==================================================
+
+def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> Dict[str, Any]:
+    """
+    افزودن اساتید به جدول authorized_users (با نقش instructor) اگر قبلاً ثبت نشده‌اند.
+    نام کاربری و رمز عبور یکسان است (پیش‌فرض: Instructor@1405).
+    """
+    from src.database import hash_password
+    pw_hash = hash_password(default_password)
+
+    instructors = get_all_instructors(db)
+    if not instructors:
+        return {"ok": False, "message": "هیچ استادی در جدول instructors وجود ندارد."}
+
+    added_count = 0
+    skipped_count = 0
+    errors = []
+
+    for inst in instructors:
+        try:
+            inst_dict = dict(inst) if not isinstance(inst, dict) else inst
+            username = inst_dict.get("username") or inst_dict.get("code")
+            full_name = inst_dict.get("full_name") or ""
+            phone = inst_dict.get("phone") or username  # اگر تلفن نبود، از username استفاده کن
+            code = inst_dict.get("code") or ""
+
+            if not username:
+                continue
+
+            # بررسی تکراری نبودن (با student_number یا phone)
+            existing = db.execute_query(
+                "SELECT id FROM authorized_users WHERE student_number = ? OR normalized_phone = ?",
+                (username, phone)
+            )
+            if existing:
+                skipped_count += 1
+                continue
+
+            # افزودن به authorized_users با نقش instructor
+            ok = db.add_authorized_user(
+                name=full_name,
+                phone=phone,
+                student_number=username,
+                student_type="ناپیوسته",  # پیش‌فرض
+                role="instructor",
+                first_channel="instructor_sync",
+                password_hash=pw_hash,
+            )
+            if ok:
+                added_count += 1
+            else:
+                errors.append(f"خطا در افزودن {username}")
+        except Exception as e:
+            errors.append(f"{inst_dict.get('username', '?')}: {e}")
+
+    return {
+        "ok": added_count > 0 or skipped_count > 0,
+        "added": added_count,
+        "skipped": skipped_count,
+        "total": len(instructors),
+        "errors": errors[:5],
+        "message": f"{added_count} استاد به کاربران سامانه اضافه شد. {skipped_count} استاد قبلاً وجود داشت.",
+    }
+
+
+# ==================================================
+# پیش‌فرض اساتید
 # ==================================================
 
 def seed_default_instructors(db):
-    """
-    ساخت چند استاد پیش‌فرض با نام کاربری/تلفن/پسورد.
-    فقط در صورتی که جدول خالی باشد.
-    """
+    """ساخت چند استاد پیش‌فرض اگر جدول خالی باشد."""
     count_rows = db.execute_query("SELECT COUNT(*) AS c FROM instructors")
     if count_rows and count_rows[0]["c"] > 0:
-        return False  # قبلاً پر شده
+        return False
 
     defaults = [
-        {
-            "code": "INST001",
-            "username": "ahmadi",
-            "first_name": "محمد",
-            "last_name": "احمدی",
-            "phone": "09121111111",
-            "email": "ahmadi@example.com",
-            "group": "مهندسی کامپیوتر",
-            "cooperation_type": "هیئت علمی",
-            "max_teaching_units": 12,
-            "password": "Instructor@1405",
-        },
-        {
-            "code": "INST002",
-            "username": "rezaei",
-            "first_name": "علی",
-            "last_name": "رضایی",
-            "phone": "09122222222",
-            "email": "rezaei@example.com",
-            "group": "مهندسی برق",
-            "cooperation_type": "تمام‌وقت",
-            "max_teaching_units": 10,
-            "password": "Instructor@1405",
-        },
-        {
-            "code": "INST003",
-            "username": "karimi",
-            "first_name": "زهرا",
-            "last_name": "کریمی",
-            "phone": "09123333333",
-            "email": "karimi@example.com",
-            "group": "علوم کامپیوتر",
-            "cooperation_type": "نیم‌وقت",
-            "max_teaching_units": 8,
-            "password": "Instructor@1405",
-        },
+        {"row_number": 1, "code": "1", "username": "ahmadi", "full_name": "محمد احمدی",
+         "phone": "09121111111", "group": "مهندسی کامپیوتر", "cooperation_type": "هیات علمی",
+         "max_teaching_units": 12, "password": "Instructor@1405"},
+        {"row_number": 2, "code": "2", "username": "rezaei", "full_name": "علی رضایی",
+         "phone": "09122222222", "group": "مهندسی برق", "cooperation_type": "دستیارآموزشی",
+         "max_teaching_units": 10, "password": "Instructor@1405"},
+        {"row_number": 3, "code": "3", "username": "karimi", "full_name": "زهرا کریمی",
+         "phone": "09123333333", "group": "علوم کامپیوتر", "cooperation_type": "حق التدریس",
+         "max_teaching_units": 8, "password": "Instructor@1405"},
     ]
 
     for d in defaults:

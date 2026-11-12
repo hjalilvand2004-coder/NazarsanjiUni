@@ -1438,6 +1438,46 @@ def api_instructors_sync():
     return jsonify(result)
 
 
+@app.route("/api/instructors/sync-to-users", methods=["POST"])
+@login_required
+def api_instructors_sync_to_users():
+    """افزودن اساتید به جدول authorized_users با نقش instructor (نام کاربری/رمز یکسان)."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    default_password = data.get("password", "Instructor@1405")
+    result = instructors_module.sync_instructors_to_users(db, default_password=default_password)
+    if result.get("ok"):
+        audit_log("instructor_sync_to_users", description=result.get("message", ""))
+    return jsonify(result)
+
+
+@app.route("/api/slot-times/periods")
+def api_slot_times_periods():
+    """گرفتن سه بازه زمانی بزرگ (صبح، ظهر، بعدازظهر)."""
+    if not PREFERENCES_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    return jsonify({"ok": True, **slot_times_module.get_time_periods()})
+
+
+@app.route("/api/courses/by-group")
+@login_required
+def api_courses_by_group():
+    """گرفتن دروس یکتا گروه‌بندی‌شده بر اساس course_group."""
+    rows = db.execute_query(
+        "SELECT unique_code AS id, unique_code, title, course_group FROM unique_courses WHERE is_active = 1 ORDER BY course_group, title"
+    )
+    items = [dict(r) if not isinstance(r, dict) else r for r in rows] if rows else []
+    # گروه‌بندی
+    groups = {}
+    for c in items:
+        g = c.get("course_group") or "بدون گروه"
+        if g not in groups:
+            groups[g] = []
+        groups[g].append(c)
+    return jsonify({"ok": True, "items": items, "groups": groups, "count": len(items)})
+
+
 @app.route("/api/instructors/sync/settings")
 @login_required
 def api_instructors_sync_settings():
