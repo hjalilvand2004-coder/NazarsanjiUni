@@ -1432,10 +1432,57 @@ def api_instructors_sync():
     if not INSTRUCTORS_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
     settings = instructors_module.load_sync_settings()
+    # اگر enabled نبود یا username/password خالی بود، از مقادیر پیش‌فرض استفاده کن
+    if not settings.get("enabled"):
+        return jsonify({
+            "ok": False,
+            "error": "sync_disabled",
+            "message": "همگام‌سازی غیرفعال است. از مودال تنظیمات، گزینه «فعال‌سازی همگام‌سازی» را تیک بزنید و ذخیره کنید."
+        })
+    if not settings.get("service_url") or not settings.get("username") or not settings.get("password"):
+        return jsonify({
+            "ok": False,
+            "error": "config_incomplete",
+            "message": "تنظیمات ناقص است. service_url، username و password را در مودال تنظیمات پر کنید."
+        })
     result = instructors_module.sync_instructors_from_remote(db, settings)
     if result.get("ok"):
         audit_log("instructor_sync", description=result.get("message", ""))
     return jsonify(result)
+
+
+@app.route("/api/instructors/sync-test", methods=["POST"])
+@login_required
+def api_instructors_sync_test():
+    """تست مستقیم اتصال به سامانه برنامه‌ریزی (بدون ذخیره تنظیمات)."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    service_url = data.get("service_url", "http://188.212.96.235:8083")
+    username = data.get("username", "admin")
+    password = data.get("password", "admin123")
+    # تست fetch
+    remote_data, err = instructors_module.fetch_instructors_from_remote(
+        service_url=service_url,
+        username=username,
+        password=password,
+    )
+    if err:
+        return jsonify({
+            "ok": False,
+            "error": err,
+            "message": f"خطا در اتصال: {err}",
+            "service_url": service_url,
+            "username": username,
+        })
+    return jsonify({
+        "ok": True,
+        "count": len(remote_data or []),
+        "message": f"اتصال موفق. {len(remote_data or [])} استاد یافت شد.",
+        "service_url": service_url,
+        "username": username,
+        "sample": (remote_data or [])[:2],
+    })
 
 
 @app.route("/api/instructors/sync-to-users", methods=["POST"])

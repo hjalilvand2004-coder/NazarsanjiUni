@@ -3,6 +3,8 @@
   "service_url": "http://188.212.96.235:8083",
   "username": "admin",
   "password": "admin123",
-  "last_sync_at": "2026-11-12 08:59:45",
+  "auto_sync": false,
+  "sync_interval_minutes": 60,
+  "last_sync_at": "2026-11-12 09:33:03",
   "last_sync_count": 286
 }

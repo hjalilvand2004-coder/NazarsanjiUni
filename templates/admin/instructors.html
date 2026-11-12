@@ -272,7 +272,10 @@
                 </div>
                 {% endif %}
             </div>
-            <div style="display:flex;gap:10px;margin-top:20px;">
+            <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+                <button type="button" onclick="testConnection()" class="btn btn-ghost" style="background:#dbeafe;color:#1e40af;border-color:#93c5fd;">
+                    🔌 تست اتصال
+                </button>
                 <button type="button" onclick="runSyncNow()" class="btn btn-primary" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);">
                     🔄 همگام‌سازی الان
                 </button>
@@ -432,6 +435,35 @@ async function runSyncNow() {
             location.reload();
         } else {
             alert('خطا: ' + (res.message || res.error || 'نامشخص'));
+        }
+    } catch (e) {
+        alert('خطا در ارتباط: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+    }
+}
+
+// تست اتصال بدون ذخیره تنظیمات
+async function testConnection() {
+    const service_url = document.getElementById('sync-service_url').value || 'http://188.212.96.235:8083';
+    const username = document.getElementById('sync-username').value || 'admin';
+    const password = document.getElementById('sync-password').value || 'admin123';
+    const btn = event.target;
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'در حال تست...';
+    try {
+        const r = await fetch('/api/instructors/sync-test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({service_url, username, password})
+        });
+        const res = await r.json();
+        if (res.ok) {
+            alert(`✅ ${res.message}\n\nسرویس: ${res.service_url}\nکاربر: ${res.username}\n\nنمونه اول:\n${JSON.stringify(res.sample?.[0] || {}, null, 2)}`);
+        } else {
+            alert(`❌ ${res.message || res.error}\n\nسرویس: ${res.service_url}\nکاربر: ${res.username}`);
         }
     } catch (e) {
         alert('خطا در ارتباط: ' + e.message);
