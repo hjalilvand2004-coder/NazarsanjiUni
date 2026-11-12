@@ -160,44 +160,44 @@
 
 <!-- مودال افزودن/ویرایش استاد -->
 <div id="instructor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:28px 32px;max-width:680px;width:95%;max-height:92vh;overflow-y:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--glass-border);padding-bottom:12px;">
-            <h3 id="modal-title" style="font-size:18px;color:var(--text-1);">➕ افزودن استاد</h3>
-            <button onclick="closeInstructorModal()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;">✕</button>
+    <div style="background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:24px;padding:28px 32px;max-width:680px;width:95%;max-height:92vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.04));border-radius:14px 14px 0 0;padding:16px 28px;margin:-28px -32px 16px;">
+            <h3 id="modal-title" style="font-size:18px;color:#0f172a;">➕ افزودن استاد</h3>
+            <button onclick="closeInstructorModal()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:22px;">✕</button>
         </div>
         <form id="instructor-form" onsubmit="submitInstructor(event)">
             <input type="hidden" id="inst-id" name="id">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
                 <div>
-                    <label class="form-label">نام *</label>
-                    <input type="text" id="i-first_name" name="first_name" class="form-input" placeholder="نام" required>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نام *</label>
+                    <input type="text" id="i-first_name" name="first_name" class="form-input" placeholder="نام" required style="background:#ffffff;color:#0f172a;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px 14px;width:100%;box-sizing:border-box;">
                 </div>
                 <div>
-                    <label class="form-label">نام خانوادگی *</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نام خانوادگی *</label>
                     <input type="text" id="i-last_name" name="last_name" class="form-input" placeholder="نام خانوادگی" required>
                 </div>
                 <div>
-                    <label class="form-label">کد استاد</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">کد استاد</label>
                     <input type="text" id="i-code" name="code" class="form-input" placeholder="مثلاً INST001" dir="ltr" style="text-align:right;">
                 </div>
                 <div>
-                    <label class="form-label">نام کاربری</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نام کاربری</label>
                     <input type="text" id="i-username" name="username" class="form-input" placeholder="نام کاربری برای ورود" dir="ltr" style="text-align:right;">
                 </div>
                 <div>
-                    <label class="form-label">تلفن همراه</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">تلفن همراه</label>
                     <input type="tel" id="i-phone" name="phone" class="form-input" placeholder="09123456789" dir="ltr" style="text-align:right;" maxlength="11">
                 </div>
                 <div>
-                    <label class="form-label">ایمیل</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">ایمیل</label>
                     <input type="email" id="i-email" name="email" class="form-input" placeholder="email@example.com" dir="ltr" style="text-align:right;">
                 </div>
                 <div>
-                    <label class="form-label">گروه تخصصی</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">گروه تخصصی</label>
                     <input type="text" id="i-group" name="group" class="form-input" placeholder="مثلاً مهندسی کامپیوتر">
                 </div>
                 <div>
-                    <label class="form-label">نوع همکاری</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نوع همکاری</label>
                     <select id="i-cooperation_type" name="cooperation_type" class="form-select">
                         <option value="">انتخاب کنید...</option>
                         <option value="هیئت علمی">هیئت علمی</option>
@@ -208,11 +208,11 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">حداکثر واحد تدریس</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">حداکثر واحد تدریس</label>
                     <input type="number" id="i-max_teaching_units" name="max_teaching_units" class="form-input" placeholder="12" min="0" dir="ltr">
                 </div>
                 <div>
-                    <label class="form-label">نقش</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نقش</label>
                     <select id="i-role" name="role" class="form-select">
                         <option value="instructor">استاد</option>
                         <option value="group_admin">مدیرگروه</option>
@@ -220,7 +220,7 @@
                     </select>
                 </div>
                 <div style="grid-column:1/-1;">
-                    <label class="form-label">رمز عبور {% if not is_edit %}*{% else %}(در صورت تغییر){% endif %}</label>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">رمز عبور {% if not is_edit %}*{% else %}(در صورت تغییر){% endif %}</label>
                     <input type="password" id="i-password" name="password" class="form-input" placeholder="حداقل ۶ کاراکتر" {% if not is_edit %}required{% endif %}>
                 </div>
                 <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;">
@@ -238,35 +238,35 @@
 
 <!-- مودال همگام‌سازی -->
 <div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:28px 32px;max-width:560px;width:95%;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--glass-border);padding-bottom:12px;">
-            <h3 style="font-size:18px;color:var(--text-1);">🔄 همگام‌سازی با سامانه برنامه‌ریزی</h3>
-            <button onclick="closeSyncModal()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;">✕</button>
+    <div style="background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:24px;padding:28px 32px;max-width:560px;width:95%;max-height:92vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;">
+            <h3 style="font-size:18px;color:#0f172a;">🔄 همگام‌سازی با سامانه برنامه‌ریزی</h3>
+            <button onclick="closeSyncModal()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:22px;">✕</button>
         </div>
         <form id="sync-form" onsubmit="saveSyncSettings(event)">
             <div style="display:grid;gap:14px;">
-                <div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--glass-strong);border-radius:10px;border:1px solid var(--glass-border);">
-                    <input type="checkbox" id="sync-enabled" name="enabled" value="1" {% if sync_settings.enabled %}checked{% endif %} style="width:20px;height:20px;accent-color:var(--accent);">
-                    <label for="sync-enabled" style="font-size:14px;cursor:pointer;">فعال‌سازی همگام‌سازی</label>
+                <div style="display:flex;align-items:center;gap:10px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
+                    <input type="checkbox" id="sync-enabled" name="enabled" value="1" {% if sync_settings.enabled %}checked{% endif %} style="width:20px;height:20px;accent-color:#6366f1;">
+                    <label for="sync-enabled" style="font-size:14px;cursor:pointer;color:#1e293b;">فعال‌سازی همگام‌سازی</label>
                 </div>
                 <div>
-                    <label class="form-label">آدرس سرویس برنامه‌ریزی</label>
-                    <input type="text" id="sync-service_url" name="service_url" class="form-input" value="{{ sync_settings.service_url }}" placeholder="http://188.212.96.235:8083" dir="ltr" style="text-align:right;font-family:monospace;">
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">آدرس سرویس برنامه‌ریزی</label>
+                    <input type="text" id="sync-service_url" name="service_url" class="form-input" value="{{ sync_settings.service_url }}" placeholder="http://188.212.96.235:8083" dir="ltr" style="text-align:right;font-family:monospace;background:#ffffff;color:#0f172a;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px 14px;width:100%;box-sizing:border-box;">
                 </div>
                 <div>
-                    <label class="form-label">نام کاربری سرویس</label>
-                    <input type="text" id="sync-username" name="username" class="form-input" value="{{ sync_settings.username }}" placeholder="نام کاربری سامانه برنامه‌ریزی" dir="ltr" style="text-align:right;">
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نام کاربری سرویس</label>
+                    <input type="text" id="sync-username" name="username" class="form-input" value="{{ sync_settings.username }}" placeholder="نام کاربری سامانه برنامه‌ریزی" dir="ltr" style="text-align:right;background:#ffffff;color:#0f172a;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px 14px;width:100%;box-sizing:border-box;">
                 </div>
                 <div>
-                    <label class="form-label">رمز عبور سرویس</label>
-                    <input type="password" id="sync-password" name="password" class="form-input" placeholder="{{ '••••••••' if sync_settings.password else 'رمز عبور سرویس' }}">
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">رمز عبور سرویس</label>
+                    <input type="password" id="sync-password" name="password" class="form-input" placeholder="{{ '••••••••' if sync_settings.password else 'رمز عبور سرویس' }}" style="background:#ffffff;color:#0f172a;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px 14px;width:100%;box-sizing:border-box;">
                 </div>
-                <div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--glass-strong);border-radius:10px;border:1px solid var(--glass-border);">
-                    <input type="checkbox" id="sync-auto_sync" name="auto_sync" value="1" {% if sync_settings.auto_sync %}checked{% endif %} style="width:20px;height:20px;accent-color:var(--accent);">
-                    <label for="sync-auto_sync" style="font-size:14px;cursor:pointer;">همگام‌سازی خودکار (هر ساعت)</label>
+                <div style="display:flex;align-items:center;gap:10px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
+                    <input type="checkbox" id="sync-auto_sync" name="auto_sync" value="1" {% if sync_settings.auto_sync %}checked{% endif %} style="width:20px;height:20px;accent-color:#6366f1;">
+                    <label for="sync-auto_sync" style="font-size:14px;cursor:pointer;color:#1e293b;">همگام‌سازی خودکار (هر ساعت)</label>
                 </div>
                 {% if sync_settings.last_sync_at %}
-                <div style="padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:12px;color:var(--text-2);">
+                <div style="padding:12px;background:#dbeafe;border:1px solid #93c5fd;border-radius:10px;font-size:12px;color:#1e40af;">
                     <strong>آخرین همگام‌سازی:</strong> {{ sync_settings.last_sync_at }}<br>
                     <strong>تعداد همگام‌شده:</strong> {{ sync_settings.last_sync_count }} استاد
                 </div>

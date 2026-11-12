@@ -74,10 +74,40 @@ def ensure_instructors_table(db):
             )
         """)
 
-        # ایندکس‌ها
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_code ON instructors(code)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_username ON instructors(username)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_phone ON instructors(phone)")
+        # مایگریشن: افزودن ستون‌های جدید به جدول instructors موجود (اگر قبلاً با schema قدیمی ساخته شده)
+        # این کار را قبل از ساخت ایندکس‌ها انجام می‌دهیم تا ستون‌ها موجود باشند
+        for col, col_def in [
+            ("row_number", "INTEGER"),
+            ("full_name", "TEXT"),
+            ("phone", "TEXT"),
+            ("email", "TEXT"),
+            ('"group"', "TEXT"),
+            ("max_teaching_units", "INTEGER DEFAULT 0"),
+            ("role", "TEXT DEFAULT 'instructor'"),
+            ("is_active", "INTEGER DEFAULT 1"),
+            ("password_hash", "TEXT"),
+            ("external_id", "INTEGER"),
+            ("source", "TEXT DEFAULT 'local'"),
+            ("updated_at", "TIMESTAMP"),
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE instructors ADD COLUMN {col} {col_def}")
+            except Exception:
+                pass  # ستون قبلاً وجود دارد
+
+        # ایندکس‌ها (بعد از اطمینان از وجود ستون‌ها)
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_code ON instructors(code)")
+        except Exception:
+            pass
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_username ON instructors(username)")
+        except Exception:
+            pass
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_instructors_phone ON instructors(phone)")
+        except Exception:
+            pass
 
         # افزودن ستون user_type به authorized_users (اگر وجود ندارد)
         try:
@@ -86,7 +116,7 @@ def ensure_instructors_table(db):
             pass  # اگر قبلاً اضافه شده
 
         conn.commit()
-        logger.info("✓ instructors table ensured")
+        logger.info("✓ instructors table ensured (with column migrations)")
     return True
 
 
@@ -385,26 +415,41 @@ def sync_instructors_from_remote(db, settings: Dict[str, Any] = None) -> Dict[st
             )
             if existing:
                 eid = existing[0]["id"] if isinstance(existing[0], dict) else existing[0][0]
-                update_instructor(db, eid, data)
-                updated_count += 1
+                ok, err_msg = update_instructor(db, eid, data)
+                if ok:
+                    updated_count += 1
+                    synced_count += 1
+                else:
+                    errors.append(f"خطا در ویرایش {code}: {err_msg}")
             else:
-                create_instructor(db, data)
-            synced_count += 1
+                inst_id, err_msg = create_instructor(db, data)
+                if err_msg:
+                    errors.append(f"خطا در افزودن {code}: {err_msg}")
+                else:
+                    synced_count += 1
         except Exception as e:
-            errors.append(str(e))
+            errors.append(f"{item.get('code', '?')}: {e}")
 
     # ذخیره زمان آخرین sync
     settings["last_sync_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     settings["last_sync_count"] = synced_count
     save_sync_settings(settings)
 
+    # بررسی واقعی تعداد رکوردها در دیتابیس
+    try:
+        verify_rows = db.execute_query("SELECT COUNT(*) AS c FROM instructors")
+        actual_count = verify_rows[0]["c"] if verify_rows else 0
+    except Exception:
+        actual_count = -1
+
     return {
         "ok": True,
         "synced": synced_count,
         "updated": updated_count,
         "new": synced_count - updated_count,
+        "actual_in_db": actual_count,
         "errors": errors[:5],
-        "message": f"{synced_count} استاد همگام‌سازی شد ({updated_count} به‌روز، {synced_count - updated_count} جدید).",
+        "message": f"{synced_count} استاد همگام‌سازی شد ({updated_count} به‌روز، {synced_count - updated_count} جدید). تعداد فعلی در DB: {actual_count}",
     }
 
 

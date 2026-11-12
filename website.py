@@ -1452,6 +1452,57 @@ def api_instructors_sync_to_users():
     return jsonify(result)
 
 
+@app.route("/api/instructors/diagnostic")
+@login_required
+def api_instructors_diagnostic():
+    """دیباگ: بررسی وضعیت جدول instructors."""
+    if not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    diag = {"ok": True, "checks": []}
+    # 1. آیا جدول وجود دارد؟
+    try:
+        rows = db.execute_query("SELECT name FROM sqlite_master WHERE type='table' AND name='instructors'")
+        if rows:
+            diag["checks"].append({"check": "table_exists", "ok": True, "value": True})
+        else:
+            diag["checks"].append({"check": "table_exists", "ok": False, "value": False,
+                                    "message": "جدول instructors وجود ندارد — migration اجرا نشده"})
+            try:
+                instructors_module.ensure_instructors_table(db)
+                diag["checks"].append({"check": "migration_retry", "ok": True,
+                                        "message": "Migration مجدداً اجرا شد"})
+            except Exception as e:
+                diag["checks"].append({"check": "migration_retry", "ok": False, "error": str(e)})
+                return jsonify(diag)
+    except Exception as e:
+        diag["checks"].append({"check": "table_exists", "ok": False, "error": str(e)})
+        return jsonify(diag)
+    # 2. تعداد رکوردها
+    try:
+        count_rows = db.execute_query("SELECT COUNT(*) AS c FROM instructors")
+        count = count_rows[0]["c"] if count_rows else 0
+        diag["checks"].append({"check": "count", "ok": True, "value": count})
+    except Exception as e:
+        diag["checks"].append({"check": "count", "ok": False, "error": str(e)})
+        count = 0
+    # 3. نمونه رکوردها
+    if count > 0:
+        try:
+            sample = db.execute_query("SELECT id, code, username, full_name, cooperation_type, source FROM instructors LIMIT 3")
+            diag["checks"].append({"check": "sample", "ok": True,
+                                    "value": [dict(r) if not isinstance(r, dict) else r for r in sample]})
+        except Exception as e:
+            diag["checks"].append({"check": "sample", "ok": False, "error": str(e)})
+    # 4. schema
+    try:
+        cols = db.execute_query("PRAGMA table_info(instructors)")
+        diag["checks"].append({"check": "schema", "ok": True,
+                                "value": [{"name": r["name"], "type": r["type"]} for r in cols] if cols else []})
+    except Exception as e:
+        diag["checks"].append({"check": "schema", "ok": False, "error": str(e)})
+    return jsonify(diag)
+
+
 @app.route("/api/slot-times/periods")
 def api_slot_times_periods():
     """گرفتن سه بازه زمانی بزرگ (صبح، ظهر، بعدازظهر)."""
