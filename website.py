@@ -198,40 +198,52 @@ def super_admin_required(f):
 
 
 def admin_or_instructor_required(f):
-    """دسترسی برای ادمین یا استاد (برای صفحات مطلوبیت‌ها).
-    برای ادمین: از admin_users استفاده می‌کند
-    برای استاد: از authorized_users استفاده می‌کند (بدون نیاز به /admin/login)"""
+    """دسترسی برای ادمین یا استاد.
+    برای استاد: از authorized_users با sqlite3 مستقیم استفاده می‌کند.
+    برای ادمین: از admin_users استفاده می‌کند.
+    در صورت خطای DB، session پاک نمی‌شود — کاربر وارد می‌ماند."""
     @wraps(f)
     def decorated(*args, **kwargs):
         admin = session.get("admin")
         if not admin:
             return redirect(url_for("instructor_login", next=request.path))
         role = admin.get("role", "admin")
-        # اگر استاد است
         if role == "instructor":
-            # بررسی در authorized_users
+            # بررسی در authorized_users با sqlite3 مستقیم
+            import sqlite3 as _sqlite3
             try:
-                rows = db.execute_query("SELECT * FROM authorized_users WHERE id = ?", (admin.get("id"),))
-                if not rows:
-                    session.pop("admin", None)
-                    flash("حساب کاربری شما غیرفعال شده است.", "error")
-                    return redirect(url_for("instructor_login", next=request.path))
-                user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
-                if user.get("is_blocked"):
-                    session.pop("admin", None)
-                    flash("حساب شما مسدود شده است.", "error")
-                    return redirect(url_for("instructor_login", next=request.path))
-                # تنظیم g.admin با اطلاعات استاد
-                g.admin = {
-                    "id": user["id"],
-                    "username": user.get("student_number") or user.get("name") or "",
-                    "full_name": user.get("name") or "",
-                    "role": "instructor",
-                }
+                conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+                conn.row_factory = _sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM authorized_users WHERE id = ?", (admin.get("id"),))
+                row = cursor.fetchone()
+                conn.close()
+                if row:
+                    user = dict(row)
+                    if user.get("is_blocked"):
+                        session.pop("admin", None)
+                        flash("حساب شما مسدود شده است.", "error")
+                        return redirect(url_for("instructor_login", next=request.path))
+                    g.admin = {
+                        "id": user["id"],
+                        "username": user.get("student_number") or user.get("name") or "",
+                        "full_name": user.get("name") or "",
+                        "role": "instructor",
+                    }
+                else:
+                    # شاید در admin_users است
+                    admin_row = db.get_admin_by_id(admin.get("id"))
+                    if admin_row and admin_row.get("is_active", 1):
+                        g.admin = dict(admin_row)
+                        g.admin["role"] = "instructor"
+                    else:
+                        session.pop("admin", None)
+                        flash("حساب کاربری شما غیرفعال شده است.", "error")
+                        return redirect(url_for("instructor_login", next=request.path))
             except Exception as e:
                 print(f"admin_or_instructor_required instructor error: {e}")
-                session.pop("admin", None)
-                return redirect(url_for("instructor_login", next=request.path))
+                # در صورت خطا، session را پاک نکن — اجازه بده کاربر وارد بماند
+                g.admin = admin
         else:
             # ادمین: بررسی در admin_users
             db_admin = db.get_admin_by_id(admin["id"])
@@ -242,11 +254,6 @@ def admin_or_instructor_required(f):
             g.admin = dict(db_admin)
             session["admin"]["full_name"] = db_admin["full_name"]
             session["admin"]["role"] = db_admin["role"]
-        # بررسی نقش مجاز
-        final_role = g.admin.get("role", "admin")
-        if final_role not in ("super_admin", "admin", "instructor"):
-            flash("دسترسی مجاز نیست.", "error")
-            return redirect(url_for("login_choice"))
         return f(*args, **kwargs)
     return decorated
 
@@ -1271,7 +1278,7 @@ def api_teaching_preferences_create():
 
 
 @app.route("/api/teaching-preferences/<int:pref_id>", methods=["PUT"])
-@login_required
+@admin_or_instructor_required
 def api_teaching_preferences_update(pref_id):
     """ویرایش مطلوبیت تدریس."""
     if not PREFERENCES_AVAILABLE:
@@ -1287,7 +1294,7 @@ def api_teaching_preferences_update(pref_id):
 
 
 @app.route("/api/teaching-preferences/<int:pref_id>", methods=["DELETE"])
-@login_required
+@admin_or_instructor_required
 def api_teaching_preferences_delete(pref_id):
     """حذف مطلوبیت تدریس."""
     if not PREFERENCES_AVAILABLE:
@@ -1399,7 +1406,7 @@ def api_time_preferences_bulk_create():
 
 
 @app.route("/api/time-preferences/<int:pref_id>", methods=["PUT"])
-@login_required
+@admin_or_instructor_required
 def api_time_preferences_update(pref_id):
     """ویرایش مطلوبیت زمان‌بندی."""
     if not PREFERENCES_AVAILABLE:
@@ -1415,7 +1422,7 @@ def api_time_preferences_update(pref_id):
 
 
 @app.route("/api/time-preferences/<int:pref_id>", methods=["DELETE"])
-@login_required
+@admin_or_instructor_required
 def api_time_preferences_delete(pref_id):
     """حذف مطلوبیت زمان‌بندی."""
     if not PREFERENCES_AVAILABLE:
@@ -1517,7 +1524,7 @@ def api_courses_unique_list():
 
 
 @app.route("/api/instructors")
-@login_required
+@admin_or_instructor_required
 def api_instructors_list():
     """لیست اساتید."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1529,7 +1536,7 @@ def api_instructors_list():
 
 
 @app.route("/api/instructors", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_create():
     """ساخت استاد جدید."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1545,7 +1552,7 @@ def api_instructors_create():
 
 
 @app.route("/api/instructors/<int:inst_id>", methods=["PUT"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_update(inst_id):
     """ویرایش استاد."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1561,7 +1568,7 @@ def api_instructors_update(inst_id):
 
 
 @app.route("/api/instructors/<int:inst_id>", methods=["DELETE"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_delete(inst_id):
     """حذف استاد."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1576,7 +1583,7 @@ def api_instructors_delete(inst_id):
 
 
 @app.route("/api/instructors/upload", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_upload():
     """آپلود اکسل اساتید."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1596,7 +1603,7 @@ def api_instructors_upload():
 
 
 @app.route("/api/instructors/sync", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_sync():
     """همگام‌سازی اساتید از سامانه برنامه‌ریزی (پورت 8083)."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1622,7 +1629,7 @@ def api_instructors_sync():
 
 
 @app.route("/api/instructors/sync-test", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_sync_test():
     """تست مستقیم اتصال به سامانه برنامه‌ریزی (بدون ذخیره تنظیمات)."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1656,7 +1663,7 @@ def api_instructors_sync_test():
 
 
 @app.route("/api/instructors/sync-debug", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_sync_debug():
     """همگام‌سازی با لاگ کامل — برای دیباگ."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1729,7 +1736,7 @@ def api_instructors_sync_debug():
 
 
 @app.route("/api/instructors/sync-to-users", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_sync_to_users():
     """افزودن اساتید به جدول authorized_users با نقش instructor (نام کاربری/رمز یکسان)."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1743,7 +1750,7 @@ def api_instructors_sync_to_users():
 
 
 @app.route("/api/instructors/diagnostic")
-@login_required
+@admin_or_instructor_required
 def api_instructors_diagnostic():
     """دیباگ: بررسی وضعیت جدول instructors."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1875,7 +1882,7 @@ def api_courses_by_group():
 
 
 @app.route("/api/instructors/sync/settings")
-@login_required
+@admin_or_instructor_required
 def api_instructors_sync_settings():
     """گرفتن تنظیمات همگام‌سازی."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1889,7 +1896,7 @@ def api_instructors_sync_settings():
 
 
 @app.route("/api/instructors/sync/settings", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_instructors_sync_settings_save():
     """ذخیره تنظیمات همگام‌سازی."""
     if not INSTRUCTORS_AVAILABLE:
@@ -1908,7 +1915,7 @@ def api_instructors_sync_settings_save():
 
 
 @app.route("/admin/instructors")
-@login_required
+@admin_or_instructor_required
 def admin_instructors():
     """صفحه مدیریت اساتید — ادمین کامل، استاد/مدیرگروه فقط می‌بیند."""
     if not INSTRUCTORS_AVAILABLE:
@@ -2808,11 +2815,84 @@ def instructor_change_password():
 
 
 # ==================================================
+# ===== [v3.14.0] مدیریت دوره‌های مطلوبیت‌ها =====
+# ==================================================
+
+@app.route("/admin/preference-periods")
+@admin_or_instructor_required
+def admin_preference_periods():
+    """مدیریت دوره‌های زمانی ثبت مطلوبیت‌ها."""
+    if g.admin.get("role") == "instructor":
+        flash("دسترسی فقط برای ادمین مجاز است.", "error")
+        return redirect(url_for("admin_preferences"))
+    periods = prefs_module.get_all_preference_periods(db) if PREFERENCES_AVAILABLE else []
+    active_period = prefs_module.get_active_preference_period(db) if PREFERENCES_AVAILABLE else None
+    return render_template("admin/preference_periods.html", periods=periods, active_period=active_period, admin=g.admin)
+
+
+@app.route("/admin/preference-periods/add", methods=["POST"])
+@admin_or_instructor_required
+def admin_preference_periods_add():
+    """افزودن دوره جدید مطلوبیت‌ها."""
+    if g.admin.get("role") == "instructor":
+        return redirect(url_for("admin_preferences"))
+    name = request.form.get("name", "")
+    semester = request.form.get("semester", "")
+    start_date = request.form.get("start_date", "")
+    end_date = request.form.get("end_date", "")
+    deadline = request.form.get("deadline", "")
+    is_active = bool(request.form.get("is_active"))
+    if not name or not start_date or not end_date:
+        flash("نام، تاریخ شروع و تاریخ پایان الزامی است.", "error")
+        return redirect(url_for("admin_preference_periods"))
+    period_id, err = prefs_module.create_preference_period(db, {
+        "name": name, "semester": semester, "start_date": start_date,
+        "end_date": end_date, "deadline": deadline, "is_active": is_active,
+    })
+    if err:
+        flash(f"خطا: {err}", "error")
+    else:
+        audit_log("pref_period_add", description=f"افزودن دوره مطلوبیت: {name}")
+        flash("دوره با موفقیت ایجاد شد.", "success")
+    return redirect(url_for("admin_preference_periods"))
+
+
+@app.route("/admin/preference-periods/<int:period_id>/activate")
+@admin_or_instructor_required
+def admin_preference_periods_activate(period_id):
+    """فعال‌سازی دوره مطلوبیت‌ها."""
+    if g.admin.get("role") == "instructor":
+        return redirect(url_for("admin_preferences"))
+    ok, err = prefs_module.activate_preference_period(db, period_id)
+    if ok:
+        audit_log("pref_period_activate", description=f"فعال‌سازی دوره #{period_id}")
+        flash("دوره فعال شد.", "success")
+    else:
+        flash(f"خطا: {err}", "error")
+    return redirect(url_for("admin_preference_periods"))
+
+
+@app.route("/admin/preference-periods/<int:period_id>/delete")
+@admin_or_instructor_required
+def admin_preference_periods_delete(period_id):
+    """حذف دوره مطلوبیت‌ها."""
+    if g.admin.get("role") == "instructor":
+        return redirect(url_for("admin_preferences"))
+    ok, err = prefs_module.delete_preference_period(db, period_id)
+    if ok:
+        audit_log("pref_period_delete", description=f"حذف دوره #{period_id}")
+        flash("دوره حذف شد.", "success")
+    else:
+        flash(f"خطا: {err}", "error")
+    return redirect(url_for("admin_preference_periods"))
+
+
+# ==================================================
 # ===== [v3.13.0] گزارش‌های مطلوبیت‌ها =====
 # ==================================================
 
 @app.route("/admin/preferences-reports")
-@login_required
+@admin_or_instructor_required
 def admin_preferences_reports():
     """گزارش‌های مطلوبیت‌های اساتید."""
     if not PREFERENCES_AVAILABLE:
@@ -2921,7 +3001,7 @@ def admin_preferences_reports():
 
 
 @app.route("/admin/preferences-reports/export-teaching")
-@login_required
+@admin_or_instructor_required
 def admin_preferences_export_teaching():
     """خروجی اکسل مطلوبیت‌های تدریس."""
     if not PREFERENCES_AVAILABLE:
@@ -2948,7 +3028,7 @@ def admin_preferences_export_teaching():
 
 
 @app.route("/admin/preferences-reports/export-time")
-@login_required
+@admin_or_instructor_required
 def admin_preferences_export_time():
     """خروجی اکسل مطلوبیت‌های زمان."""
     if not PREFERENCES_AVAILABLE:

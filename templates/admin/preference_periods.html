@@ -1,0 +1,114 @@
+{% extends "admin/base.html" %}
+{% block title %}دوره‌های مطلوبیت‌ها{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>📅 دوره‌های زمانی ثبت مطلوبیت‌ها</h1>
+        <div class="breadcrumb">خانه / مدیریت / دوره‌های مطلوبیت</div>
+    </div>
+    <div class="actions">
+        <a href="{{ url_for('admin_preferences') }}" class="btn btn-ghost btn-sm">← بازگشت</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+{% endwith %}
+
+{% if active_period %}
+<div class="alert alert-success" style="margin-bottom:20px;">
+    <strong>✅ دوره فعال:</strong> {{ active_period.name }} — از {{ active_period.start_date }} تا {{ active_period.end_date }}
+    {% if active_period.deadline %} (مهلت: {{ active_period.deadline }}){% endif %}
+</div>
+{% else %}
+<div class="alert alert-warning" style="margin-bottom:20px;">
+    <strong>⚠️ توجه:</strong> هیچ دوره فعالی وجود ندارد. اساتید نمی‌توانند مطلوبیت ثبت کنند. یک دوره ایجاد و فعال کنید.
+</div>
+{% endif %}
+
+<!-- فرم افزودن دوره -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><div class="card-title">➕ افزودن دوره جدید</div></div>
+    <div style="padding:20px;">
+        <form method="POST" action="{{ url_for('admin_preference_periods_add') }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                    <label class="form-label">نام دوره *</label>
+                    <input type="text" name="name" class="form-input" placeholder="مثلاً: مطلوبیت‌های مهر ۱۴۰۵" required>
+                </div>
+                <div>
+                    <label class="form-label">ترم</label>
+                    <input type="text" name="semester" class="form-input" placeholder="مثلاً: مهر ۱۴۰۵">
+                </div>
+                <div>
+                    <label class="form-label">تاریخ شروع *</label>
+                    <input type="date" name="start_date" class="form-input" required>
+                </div>
+                <div>
+                    <label class="form-label">تاریخ پایان *</label>
+                    <input type="date" name="end_date" class="form-input" required>
+                </div>
+                <div>
+                    <label class="form-label">مهلت نهایی</label>
+                    <input type="date" name="deadline" class="form-input">
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding-top:30px;">
+                    <input type="checkbox" name="is_active" value="1" style="width:20px;height:20px;accent-color:var(--accent);">
+                    <label class="form-label" style="margin:0;">فعال‌سازی این دوره</label>
+                </div>
+            </div>
+            <div style="margin-top:20px;">
+                <button type="submit" class="btn btn-primary">💾 ذخیره دوره</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- لیست دوره‌ها -->
+<div class="card">
+    <div class="card-header"><div class="card-title">📋 دوره‌های ثبت‌شده</div></div>
+    <div style="padding:0;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>نام</th>
+                    <th>ترم</th>
+                    <th>شروع</th>
+                    <th>پایان</th>
+                    <th>مهلت</th>
+                    <th>وضعیت</th>
+                    <th>عملیات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in periods %}
+                <tr>
+                    <td>{{ p.id }}</td>
+                    <td>{{ p.name }}</td>
+                    <td>{{ p.semester or '—' }}</td>
+                    <td>{{ p.start_date }}</td>
+                    <td>{{ p.end_date }}</td>
+                    <td>{{ p.deadline or '—' }}</td>
+                    <td>
+                        {% if p.is_active %}<span class="badge badge-success">فعال</span>
+                        {% else %}<span class="badge badge-danger">غیرفعال</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if not p.is_active %}
+                        <a href="{{ url_for('admin_preference_periods_activate', period_id=p.id) }}" class="btn btn-ghost btn-sm" title="فعال‌سازی">✓</a>
+                        {% endif %}
+                        <a href="{{ url_for('admin_preference_periods_delete', period_id=p.id) }}" class="btn btn-danger btn-sm" title="حذف" onclick="return confirm('حذف شود؟')">×</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-3);">هیچ دوره‌ای ثبت نشده است.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

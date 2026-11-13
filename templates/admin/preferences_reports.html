@@ -8,8 +8,10 @@
         <div class="breadcrumb">خانه / گزارش‌ها / مطلوبیت‌ها</div>
     </div>
     <div class="actions">
+        {% if admin.role != 'instructor' %}
         <a href="{{ url_for('admin_preferences_export_teaching') }}" class="btn btn-ghost btn-sm">📥 خروجی اکسل تدریس</a>
         <a href="{{ url_for('admin_preferences_export_time') }}" class="btn btn-ghost btn-sm">📥 خروجی اکسل زمان</a>
+        {% endif %}
         <a href="{{ url_for('admin_preferences') }}" class="btn btn-ghost btn-sm">← بازگشت</a>
     </div>
 </div>
@@ -130,7 +132,7 @@
                     {% set key = day + '|' + p %}
                     {% set count = heatmap.get(key, 0) %}
                     {% set intensity = (count * 25) if count > 0 else 0 %}
-                    <td style="background: {% if count > 0 %}rgba(99,102,241,{{ 0.15 + (count * 0.1) if count <= 8 else 0.85 }}){% else %}transparent{% endif %};border-radius:6px;font-weight:{% if count > 0 %}700{% else %}400{% endif %};color:{% if count > 5 %}#fff{% else %}var(--text-2){% endif %};">
+                    <td style="background: {% if count > 0 %}rgba(239,68,68,{{ 0.15 + (count * 0.1) if count <= 8 else 0.85 }}){% else %}transparent{% endif %};border-radius:6px;font-weight:{% if count > 0 %}700{% else %}400{% endif %};color:{% if count > 5 %}#fff{% else %}var(--text-2){% endif %};">
                         {{ count }}
                     </td>
                     {% endfor %}
@@ -140,7 +142,7 @@
         </table>
         <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-3);">
             <span>کم</span>
-            <div style="width:120px;height:12px;background:linear-gradient(90deg,rgba(99,102,241,0.15),rgba(99,102,241,0.85));border-radius:6px;"></div>
+            <div style="width:120px;height:12px;background:linear-gradient(90deg,rgba(239,68,68,0.15),rgba(239,68,68,0.85));border-radius:6px;"></div>
             <span>زیاد</span>
         </div>
     </div>
