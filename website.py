@@ -283,7 +283,7 @@ def login_choice():
 
 @app.route("/instructor/login", methods=["GET", "POST"])
 def instructor_login():
-    """ورود استاد."""
+    """ورود استاد — جستجو در authorized_users (اساتید از طریق sync_to_users)."""
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
@@ -292,27 +292,54 @@ def instructor_login():
             flash("نام کاربری و رمز عبور را وارد کنید.", "error")
             return render_template("instructor/login.html")
 
-        admin = db.get_admin_by_username(username)
-        if not admin or not verify_password(password, admin["password_hash"]):
+        # جستجو در authorized_users (اساتید از طریق sync_to_users اینجا اضافه می‌شوند)
+        # اول با student_number (که همان username است)
+        user = db.get_user_by_student_number(username)
+        # اگر پیدا نشد، با phone جستجو کن
+        if not user:
+            try:
+                rows = db.execute_query(
+                    "SELECT * FROM authorized_users WHERE display_phone = ? OR normalized_phone = ?",
+                    (username, username)
+                )
+                if rows:
+                    user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+            except Exception:
+                pass
+
+        if not user:
             flash("نام کاربری یا رمز عبور نادرست است.", "error")
             return render_template("instructor/login.html")
 
-        if not admin["is_active"]:
-            flash("حساب شما غیرفعال است.", "error")
+        # بررسی مسدود بودن
+        if user.get("is_blocked"):
+            flash("حساب شما مسدود شده است.", "error")
             return render_template("instructor/login.html")
 
-        # فقط استادها می‌توانند از این مسیر وارد شوند
-        if admin.get("role") != "instructor":
-            flash("این حساب برای ورود استاد نیست. از ورود ادمین استفاده کنید.", "error")
+        # بررسی نقش: باید instructor باشد
+        user_role = user.get("role") or ""
+        user_type = user.get("user_type") or ""
+        if user_role != "instructor" and user_type != "instructor":
+            flash("این حساب برای ورود استاد نیست.", "error")
             return render_template("instructor/login.html")
 
+        # بررسی رمز عبور
+        if not db.verify_user_password(user, password):
+            flash("نام کاربری یا رمز عبور نادرست است.", "error")
+            return render_template("instructor/login.html")
+
+        # ورود موفق
+        db.record_login(user["id"], CHANNEL_WEBSITE,
+                        ip_address=request.remote_addr,
+                        user_agent=request.headers.get("User-Agent", "")[:200])
         session.permanent = True
         session["admin"] = {
-            "id": admin["id"], "username": admin["username"],
-            "full_name": admin["full_name"], "role": admin["role"],
+            "id": user["id"],
+            "username": user.get("student_number") or user.get("name") or "",
+            "full_name": user.get("name") or "",
+            "role": "instructor",
         }
-        db.update_admin_last_login(admin["id"])
-        audit_log("login", description=f"ورود استاد {admin['username']}")
+        flash("ورود موفقیت‌آمیز بود!", "success")
         return redirect(url_for("instructor_dashboard"))
 
     return render_template("instructor/login.html")
