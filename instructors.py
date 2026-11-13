@@ -618,11 +618,12 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
 
     instructors = get_all_instructors(db)
     if not instructors:
-        return {"ok": False, "message": "هیچ استادی در جدول instructors وجود ندارد."}
+        return {"ok": False, "message": "هیچ استادی در جدول instructors وجود ندارد. ابتدا از تب همگام‌سازی، اساتید را از سامانه برنامه‌ریزی واکشی کنید.", "total": 0}
 
     added_count = 0
     skipped_count = 0
     errors = []
+    debug_info = []
 
     # گرفتن لیست username های موجود برای جلوگیری از تکرار
     existing_usernames = set()
@@ -630,8 +631,8 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
         existing_rows = db.execute_query("SELECT student_number FROM authorized_users WHERE student_number IS NOT NULL")
         for r in (existing_rows or []):
             existing_usernames.add(r["student_number"] if isinstance(r, dict) else r[0])
-    except Exception:
-        pass
+    except Exception as e:
+        debug_info.append(f"خطا در خواندن usernames: {e}")
 
     # گرفتن لیست phone های موجود برای جلوگیری از duplicate UNIQUE
     existing_phones = set()
@@ -639,8 +640,28 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
         existing_phone_rows = db.execute_query("SELECT normalized_phone FROM authorized_users WHERE normalized_phone IS NOT NULL")
         for r in (existing_phone_rows or []):
             existing_phones.add(r["normalized_phone"] if isinstance(r, dict) else r[0])
-    except Exception:
-        pass
+    except Exception as e:
+        debug_info.append(f"خطا در خواندن phones: {e}")
+
+    debug_info.append(f"تعداد اساتید در جدول instructors: {len(instructors)}")
+    debug_info.append(f"تعداد usernames موجود در authorized_users: {len(existing_usernames)}")
+    debug_info.append(f"تعداد phones موجود در authorized_users: {len(existing_phones)}")
+
+    # بررسی schema جدول authorized_users
+    try:
+        cols = db.execute_query("PRAGMA table_info(authorized_users)")
+        col_names = [c["name"] for c in cols] if cols else []
+        debug_info.append(f"ستون‌های authorized_users: {col_names}")
+        if "user_type" not in col_names:
+            debug_info.append("⚠️ ستون user_type وجود ندارد — تلاش برای افزودن")
+            try:
+                db.execute_query("ALTER TABLE authorized_users ADD COLUMN user_type TEXT DEFAULT 'student'")
+                debug_info.append("✓ ستون user_type اضافه شد")
+            except Exception as e:
+                debug_info.append(f"❌ خطا در افزودن user_type: {e}")
+                errors.append(f"خطا در افزودن ستون user_type: {e}")
+    except Exception as e:
+        debug_info.append(f"خطا در بررسی schema: {e}")
 
     for inst in instructors:
         try:
@@ -651,6 +672,7 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
             code = inst_dict.get("code") or ""
 
             if not username:
+                errors.append(f"استاد با id={inst_dict.get('id', '?')} username ندارد")
                 continue
 
             # بررسی تکراری نبودن با student_number
@@ -683,7 +705,7 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
                     existing_usernames.add(username)
                     existing_phones.add(phone)
                 else:
-                    errors.append(f"خطا در افزودن {username}")
+                    errors.append(f"خطا در افزودن {username} — execute_query نتیجه None برگرداند")
             except Exception as e:
                 errors.append(f"{username}: {e}")
         except Exception as e:
@@ -695,6 +717,7 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
         "skipped": skipped_count,
         "total": len(instructors),
         "errors": errors[:5],
+        "debug_info": debug_info,
         "message": f"{added_count} استاد به کاربران سامانه اضافه شد (رمز عبور = نام کاربری). {skipped_count} استاد قبلاً وجود داشت.",
     }
 

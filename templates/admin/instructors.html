@@ -508,9 +508,26 @@ async function syncToUsers() {
         });
         const res = await r.json();
         if (res.ok) {
-            alert(res.message);
+            let msg = res.message;
+            if (res.debug_info && res.debug_info.length > 0) {
+                msg += '\n\n=== اطلاعات دیباگ ===\n' + res.debug_info.join('\n');
+            }
+            if (res.errors && res.errors.length > 0) {
+                msg += '\n\n=== خطاها (۵ مورد اول) ===\n' + res.errors.join('\n');
+            }
+            alert(msg);
+            if (res.added > 0) {
+                location.reload();
+            }
         } else {
-            alert('خطا: ' + (res.message || res.error || 'نامشخص'));
+            let msg = 'خطا: ' + (res.message || res.error || 'نامشخص');
+            if (res.debug_info && res.debug_info.length > 0) {
+                msg += '\n\n=== اطلاعات دیباگ ===\n' + res.debug_info.join('\n');
+            }
+            if (res.errors && res.errors.length > 0) {
+                msg += '\n\n=== خطاها ===\n' + res.errors.join('\n');
+            }
+            alert(msg);
         }
     } catch (e) {
         alert('خطا: ' + e.message);
