@@ -1301,8 +1301,31 @@ def api_teaching_preferences_delete(pref_id):
     return jsonify({"ok": True, "message": "رکورد با موفقیت حذف شد"})
 
 
+@app.route("/api/teaching-preferences/bulk", methods=["POST"])
+@admin_or_instructor_required
+def api_teaching_preferences_bulk():
+    """ساخت چندین مطلوبیت تدریس به‌صورت یکجا (برای Course Picker)."""
+    if not PREFERENCES_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    items = data.get("items", [])
+    if not items:
+        return jsonify({"ok": False, "error": "لطفاً حداقل یک درس انتخاب کنید."}), 400
+    created_ids = []
+    errors = []
+    for item in items:
+        pref_id, err = prefs_module.create_teaching_preference(db, item)
+        if err:
+            errors.append(f"{item.get('course_name', '?')}: {err}")
+        else:
+            created_ids.append(pref_id)
+    if created_ids:
+        audit_log("teaching_pref_bulk", description=f"ساخت {len(created_ids)} مطلوبیت تدریس")
+    return jsonify({"ok": len(created_ids) > 0, "count": len(created_ids), "ids": created_ids, "errors": errors[:5]})
+
+
 @app.route("/api/teaching-preferences/upload", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_teaching_preferences_upload():
     """آپلود اکسل مطلوبیت‌های تدریس."""
     if not PREFERENCES_AVAILABLE:
@@ -1363,12 +1386,16 @@ def api_time_preferences_bulk_create():
     if not items:
         return jsonify({"ok": False, "error": "لطفاً حداقل یک بازه زمانی انتخاب کنید."}), 400
     created_ids = []
+    errors = []
     for item in items:
         pref_id, err = prefs_module.create_time_preference(db, item)
         if err is None:
             created_ids.append(pref_id)
-    audit_log("time_pref_bulk_create", description=f"ساخت {len(created_ids)} مطلوبیت زمان")
-    return jsonify({"ok": True, "count": len(created_ids), "ids": created_ids})
+        else:
+            errors.append(f"{item.get('day', '?')}: {err}")
+    if created_ids:
+        audit_log("time_pref_bulk_create", description=f"ساخت {len(created_ids)} مطلوبیت زمان")
+    return jsonify({"ok": len(created_ids) > 0, "count": len(created_ids), "ids": created_ids, "errors": errors[:5]})
 
 
 @app.route("/api/time-preferences/<int:pref_id>", methods=["PUT"])
@@ -1403,7 +1430,7 @@ def api_time_preferences_delete(pref_id):
 
 
 @app.route("/api/time-preferences/upload", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_time_preferences_upload():
     """آپلود اکسل مطلوبیت‌های زمان‌بندی با پارامتر term."""
     if not PREFERENCES_AVAILABLE:

@@ -781,7 +781,11 @@ async function submitCoursePicker() {
             closeCoursePicker();
             location.reload();
         } else {
-            alert('خطا: ' + (res.error || 'نامشخص'));
+            let msg = 'خطا: ' + (res.error || 'نامشخص');
+            if (res.errors && res.errors.length > 0) {
+                msg += '\n\nخطاها:\n' + res.errors.join('\n');
+            }
+            alert(msg);
         }
     } catch (e) {
         alert('خطا: ' + e.message);
@@ -920,7 +924,11 @@ async function submitTimePicker() {
             closeTimePicker();
             location.reload();
         } else {
-            alert('خطا: ' + (res.error || 'نامشخص'));
+            let msg = 'خطا: ' + (res.error || 'نامشخص');
+            if (res.errors && res.errors.length > 0) {
+                msg += '\n\nخطاها:\n' + res.errors.join('\n');
+            }
+            alert(msg);
         }
     } catch (e) {
         alert('خطا: ' + e.message);
