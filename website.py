@@ -228,6 +228,49 @@ def instructor_only_required(f):
     return decorated
 
 
+def instructor_login_required(f):
+    """دکوراتور مخصوص استاد — بررسی session['admin'] با role='instructor'.
+    این دکوراتور از authorized_users استفاده می‌کند (نه admin_users)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        admin = session.get("admin")
+        if not admin:
+            return redirect(url_for("instructor_login", next=request.path))
+        # بررسی نقش instructor
+        if admin.get("role") != "instructor":
+            flash("دسترسی فقط برای استاد مجاز است.", "error")
+            return redirect(url_for("login_choice"))
+        # بررسی مسدود نبودن کاربر در authorized_users
+        try:
+            rows = db.execute_query("SELECT * FROM authorized_users WHERE id = ?", (admin.get("id"),))
+            if not rows:
+                # شاید در admin_users است (مثل ادمین‌های قدیمی)
+                admin_row = db.get_admin_by_id(admin.get("id"))
+                if not admin_row or not admin_row.get("is_active", 1):
+                    session.pop("admin", None)
+                    flash("حساب کاربری شما غیرفعال شده است.", "error")
+                    return redirect(url_for("instructor_login"))
+            else:
+                user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+                if user.get("is_blocked"):
+                    session.pop("admin", None)
+                    flash("حساب شما مسدود شده است.", "error")
+                    return redirect(url_for("instructor_login"))
+                # به‌روزرسانی g.admin با اطلاعات کاربر
+                g.admin = {
+                    "id": user["id"],
+                    "username": user.get("student_number") or user.get("name") or "",
+                    "full_name": user.get("name") or "",
+                    "role": "instructor",
+                }
+        except Exception as e:
+            print(f"instructor_login_required error: {e}")
+            session.pop("admin", None)
+            return redirect(url_for("instructor_login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
 def student_login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -415,10 +458,10 @@ def instructor_register():
 
 
 @app.route("/instructor/dashboard")
-@login_required
+@instructor_login_required
 def instructor_dashboard():
     """داشبورد استاد — دسترسی به مطلوبیت‌ها + داشبورد فقط‌خواندنی."""
-    admin = session.get("admin")
+    admin = g.admin
     if not admin or admin.get("role") != "instructor":
         flash("دسترسی فقط برای استاد مجاز است.", "error")
         return redirect(url_for("admin_index"))
