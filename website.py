@@ -198,17 +198,55 @@ def super_admin_required(f):
 
 
 def admin_or_instructor_required(f):
-    """دسترسی برای ادمین یا استاد (برای صفحات مطلوبیت‌ها)."""
+    """دسترسی برای ادمین یا استاد (برای صفحات مطلوبیت‌ها).
+    برای ادمین: از admin_users استفاده می‌کند
+    برای استاد: از authorized_users استفاده می‌کند (بدون نیاز به /admin/login)"""
     @wraps(f)
-    @login_required
     def decorated(*args, **kwargs):
         admin = session.get("admin")
         if not admin:
-            return redirect(url_for("admin_login"))
+            return redirect(url_for("instructor_login", next=request.path))
         role = admin.get("role", "admin")
-        if role not in ("super_admin", "admin", "instructor"):
+        # اگر استاد است
+        if role == "instructor":
+            # بررسی در authorized_users
+            try:
+                rows = db.execute_query("SELECT * FROM authorized_users WHERE id = ?", (admin.get("id"),))
+                if not rows:
+                    session.pop("admin", None)
+                    flash("حساب کاربری شما غیرفعال شده است.", "error")
+                    return redirect(url_for("instructor_login", next=request.path))
+                user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+                if user.get("is_blocked"):
+                    session.pop("admin", None)
+                    flash("حساب شما مسدود شده است.", "error")
+                    return redirect(url_for("instructor_login", next=request.path))
+                # تنظیم g.admin با اطلاعات استاد
+                g.admin = {
+                    "id": user["id"],
+                    "username": user.get("student_number") or user.get("name") or "",
+                    "full_name": user.get("name") or "",
+                    "role": "instructor",
+                }
+            except Exception as e:
+                print(f"admin_or_instructor_required instructor error: {e}")
+                session.pop("admin", None)
+                return redirect(url_for("instructor_login", next=request.path))
+        else:
+            # ادمین: بررسی در admin_users
+            db_admin = db.get_admin_by_id(admin["id"])
+            if not db_admin or not db_admin["is_active"]:
+                session.pop("admin", None)
+                flash("حساب کاربری شما غیرفعال شده است.", "error")
+                return redirect(url_for("admin_login", next=request.path))
+            g.admin = dict(db_admin)
+            session["admin"]["full_name"] = db_admin["full_name"]
+            session["admin"]["role"] = db_admin["role"]
+        # بررسی نقش مجاز
+        final_role = g.admin.get("role", "admin")
+        if final_role not in ("super_admin", "admin", "instructor"):
             flash("دسترسی مجاز نیست.", "error")
-            return redirect(url_for("admin_index"))
+            return redirect(url_for("login_choice"))
         return f(*args, **kwargs)
     return decorated
 
