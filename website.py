@@ -420,7 +420,6 @@ def instructor_login():
             "full_name": user.get("name") or "",
             "role": "instructor",
         }
-        flash("ورود موفقیت‌آمیز بود!", "success")
         # هدایت مستقیم به صفحه مطلوبیت‌ها
         return redirect(url_for("admin_preferences"))
 
@@ -2778,7 +2777,7 @@ def instructor_change_password():
         flash("رمز عبور با موفقیت تغییر کرد.", "success")
         return redirect(url_for("admin_preferences"))
 
-    return render_template("instructor/change_password.html")
+    return render_template("instructor/change_password.html", admin=g.admin)
 
 
 # ==================================================

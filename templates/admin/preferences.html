@@ -299,12 +299,6 @@
     </div>
 </div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% for cat, msg in messages %}
-        <div class="alert alert-{{ cat }}">{{ msg }}</div>
-    {% endfor %}
-{% endwith %}
-
 <!-- آمار -->
 <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
     <div class="stat-card">
@@ -325,11 +319,11 @@
 </div>
 
 <!-- دکمه‌های اقدام اصلی -->
-<div class="actions" style="margin-bottom:20px;">
-    <button onclick="openCoursePicker()" class="btn btn-primary btn-sm">
+<div style="display:flex;gap:10px;margin-bottom:20px;justify-content:flex-start;">
+    <button onclick="openCoursePicker()" class="btn btn-primary" style="font-size:14px;padding:8px 16px;">
         📚 انتخاب درس‌های مطلوب
     </button>
-    <button onclick="openTimePicker()" class="btn btn-primary btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+    <button onclick="openTimePicker()" class="btn btn-primary" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);font-size:14px;padding:8px 16px;">
         📅 انتخاب زمان‌های مطلوب
     </button>
 </div>
@@ -462,7 +456,7 @@
             </div>
         </div>
         <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;">
-            <div style="font-size:13px;color:#475569;">
+            <div style="font-size:13px;color:#475569;" id="course-count-display">
                 <span id="selected-courses-count">۰</span> درس انتخاب‌شده
             </div>
             <div style="display:flex;gap:10px;">
@@ -558,6 +552,12 @@ let selectedSlots = [];
 
 const faDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
 function toFa(n) { return String(n).replace(/[0-9]/g, d => faDigits[d]); }
+
+// Toast برای هشدارهای موقت
+function showToast(msg) {
+    // استفاده از alert ساده اگر toast موجود نیست
+    alert(msg);
+}
 
 // تعریف بازه‌های زمانی
 const PERIODS = {
@@ -677,10 +677,25 @@ function filterCourseList() {
 }
 
 function toggleCourse(id) {
-    if (selectedCourses.has(id)) {
-        selectedCourses.delete(id);
-    } else {
+    // بررسی سقف واحدها قبل از اجازه انتخاب
+    if (!selectedCourses.has(id)) {
+        // درس جدید — بررسی سقف
+        const maxUnits = {{ max_teaching_units|default(0) }};
+        if (maxUnits > 0) {
+            const ceiling = maxUnits + 3; // سقف = کف + ۳ واحد
+            let currentCredits = getTotalCredits();
+            const course = allCourses.find(c => (c.id || c.unique_code) == id);
+            if (course) {
+                const credits = parseInt(course.credits) || 0;
+                if (currentCredits + credits > ceiling) {
+                    showToast(`⚠️ امکان انتخاب این درس وجود ندارد.\nمجموع واحدها ${currentCredits + credits} می‌شود که بیشتر از سقف مجاز (${ceiling} واحد) است.\nکف: ${maxUnits} | سقف: ${ceiling} واحد`);
+                    return;
+                }
+            }
+        }
         selectedCourses.add(id);
+    } else {
+        selectedCourses.delete(id);
     }
     const card = document.querySelector(`.course-pick-card[data-id="${id}"]`);
     if (card) {
@@ -691,8 +706,29 @@ function toggleCourse(id) {
     updateCourseCount();
 }
 
+function getTotalCredits() {
+    let total = 0;
+    for (const id of selectedCourses) {
+        const course = allCourses.find(c => (c.id || c.unique_code) == id);
+        if (course) {
+            total += parseInt(course.credits) || 0;
+        }
+    }
+    return total;
+}
+
 function updateCourseCount() {
-    document.getElementById('selected-courses-count').textContent = toFa(selectedCourses.size);
+    const count = selectedCourses.size;
+    const credits = getTotalCredits();
+    const maxUnits = {{ max_teaching_units|default(0) }};
+    const ceiling = maxUnits + 3;
+    
+    let html = `<span id="selected-courses-count">${toFa(count)}</span> درس انتخاب‌شده`;
+    if (maxUnits > 0) {
+        html += ` • <span style="color:${credits > ceiling ? '#ef4444' : '#10b981'};font-weight:700;">${toFa(credits)} واحد</span>`;
+        html += ` (کف: ${toFa(maxUnits)} / سقف: ${toFa(ceiling)})`;
+    }
+    document.getElementById('course-count-display').innerHTML = html;
 }
 
 async function submitCoursePicker() {
@@ -704,16 +740,10 @@ async function submitCoursePicker() {
     // اعتبارسنجی تعداد واحد
     const maxUnits = {{ max_teaching_units|default(0) }};
     if (maxUnits > 0) {
-        let totalCredits = 0;
-        for (const id of selectedCourses) {
-            const course = allCourses.find(c => (c.id || c.unique_code) == id);
-            if (course) {
-                const credits = parseInt(course.credits) || 0;
-                totalCredits += credits;
-            }
-        }
-        if (totalCredits > maxUnits) {
-            alert(`⚠️ مجموع واحدهای انتخابی (${totalCredits} واحد) بیشتر از سقف مجاز (${maxUnits} واحد) است.\n\nلطفاً دروس کمتری انتخاب کنید.`);
+        const ceiling = maxUnits + 3; // سقف = کف + ۳ واحد
+        let totalCredits = getTotalCredits();
+        if (totalCredits > ceiling) {
+            alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) بیشتر از سقف مجاز (${toFa(ceiling)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\nلطفاً دروس کمتری انتخاب کنید.`);
             return;
         }
     }
