@@ -2839,6 +2839,24 @@ def admin_preference_periods():
     if g.admin.get("role") == "instructor":
         flash("دسترسی فقط برای ادمین مجاز است.", "error")
         return redirect(url_for("admin_preferences"))
+    # بسته شدن خودکار دوره‌هایی که مهلتشان تمام شده
+    if PREFERENCES_AVAILABLE:
+        from datetime import datetime
+        today = datetime.now().strftime("%Y/%m/%d")
+        import sqlite3 as _sqlite3
+        try:
+            conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+            cursor = conn.cursor()
+            # دوره‌هایی که فعال هستند ولی مهلتشان گذشته
+            cursor.execute(
+                "UPDATE preference_periods SET is_active = 0 WHERE is_active = 1 AND deadline IS NOT NULL AND deadline != '' AND deadline < ?",
+                (today,)
+            )
+            if cursor.rowcount > 0:
+                conn.commit()
+            conn.close()
+        except Exception:
+            pass
     periods = prefs_module.get_all_preference_periods(db) if PREFERENCES_AVAILABLE else []
     active_period = prefs_module.get_active_preference_period(db) if PREFERENCES_AVAILABLE else None
     return render_template("admin/preference_periods.html", periods=periods, active_period=active_period, admin=g.admin)
@@ -2898,6 +2916,26 @@ def admin_preference_periods_delete(period_id):
         flash("دوره حذف شد.", "success")
     else:
         flash(f"خطا: {err}", "error")
+    return redirect(url_for("admin_preference_periods"))
+
+
+@app.route("/admin/preference-periods/<int:period_id>/close")
+@admin_or_instructor_required
+def admin_preference_periods_close(period_id):
+    """بستن دوره مطلوبیت‌ها (غیرفعال کردن)."""
+    if g.admin.get("role") == "instructor":
+        return redirect(url_for("admin_preferences"))
+    import sqlite3 as _sqlite3
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE preference_periods SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (period_id,))
+        conn.commit()
+        conn.close()
+        audit_log("pref_period_close", description=f"بستن دوره #{period_id}")
+        flash("دوره بسته شد. اساتید دیگر نمی‌توانند مطلوبیت ثبت یا ویرایش کنند.", "success")
+    except Exception as e:
+        flash(f"خطا: {e}", "error")
     return redirect(url_for("admin_preference_periods"))
 
 
