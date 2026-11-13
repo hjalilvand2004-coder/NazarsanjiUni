@@ -421,7 +421,8 @@ def instructor_login():
             "role": "instructor",
         }
         flash("ورود موفقیت‌آمیز بود!", "success")
-        return redirect(url_for("instructor_dashboard"))
+        # هدایت مستقیم به صفحه مطلوبیت‌ها
+        return redirect(url_for("admin_preferences"))
 
     return render_template("instructor/login.html")
 
@@ -1108,8 +1109,8 @@ def sso_callback():
                 "role": "instructor",
             }
             flash("ورود موفقیت‌آمیز بود! (از طریق SSO — استاد)", "success")
-            instructor_redirect = settings.get("web_redirect") or "/instructor/dashboard"
-            return redirect(instructor_redirect)
+            # هدایت مستقیم به صفحه مطلوبیت‌ها
+            return redirect(url_for("admin_preferences"))
         elif user_role == "admin":
             session["admin"] = {
                 "id": user["id"],
@@ -1243,7 +1244,7 @@ def api_slot_times_schedule():
 
 # --- Teaching Preferences ---
 @app.route("/api/teaching-preferences")
-@login_required
+@admin_or_instructor_required
 def api_teaching_preferences_list():
     """لیست مطلوبیت‌های تدریس."""
     if not PREFERENCES_AVAILABLE:
@@ -1255,7 +1256,7 @@ def api_teaching_preferences_list():
 
 
 @app.route("/api/teaching-preferences", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_teaching_preferences_create():
     """ساخت مطلوبیت تدریس جدید."""
     if not PREFERENCES_AVAILABLE:
@@ -1325,7 +1326,7 @@ def api_teaching_preferences_upload():
 
 # --- Time Preferences ---
 @app.route("/api/time-preferences")
-@login_required
+@admin_or_instructor_required
 def api_time_preferences_list():
     """لیست مطلوبیت‌های زمان‌بندی."""
     if not PREFERENCES_AVAILABLE:
@@ -1337,7 +1338,7 @@ def api_time_preferences_list():
 
 
 @app.route("/api/time-preferences", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_time_preferences_create():
     """ساخت مطلوبیت زمان‌بندی جدید."""
     if not PREFERENCES_AVAILABLE:
@@ -1353,7 +1354,7 @@ def api_time_preferences_create():
 
 
 @app.route("/api/time-preferences/bulk", methods=["POST"])
-@login_required
+@admin_or_instructor_required
 def api_time_preferences_bulk_create():
     """ساخت چندین مطلوبیت زمان‌بندی به‌صورت یکجا (برای TimeSlotSelector)."""
     if not PREFERENCES_AVAILABLE:
@@ -1470,7 +1471,7 @@ def admin_preferences():
 # ==================================================
 
 @app.route("/api/courses/unique")
-@login_required
+@admin_or_instructor_required
 def api_courses_unique_list():
     """لیست دروس یکتا — برای استفاده در Course Picker."""
     rows = db.execute_query("SELECT unique_code AS id, unique_code, title, course_group FROM unique_courses WHERE is_active = 1 ORDER BY title")
@@ -1817,7 +1818,7 @@ def api_slot_times_periods():
 
 
 @app.route("/api/courses/by-group")
-@login_required
+@admin_or_instructor_required
 def api_courses_by_group():
     """گرفتن دروس یکتا گروه‌بندی‌شده بر اساس course_group."""
     rows = db.execute_query(
@@ -2507,7 +2508,7 @@ def admin_survey_reset_responses(survey_id):
 
 
 @app.route("/admin/reports")
-@login_required
+@admin_or_instructor_required
 def admin_reports():
     top_courses = db.get_top_courses(20)
     daily = db.get_daily_requests(30)
@@ -2679,7 +2680,7 @@ def admin_admin_delete(admin_id):
 
 
 @app.route("/admin/profile", methods=["GET", "POST"])
-@login_required
+@admin_or_instructor_required
 def admin_profile():
     if request.method == "POST":
         full_name = request.form.get("full_name", "")
