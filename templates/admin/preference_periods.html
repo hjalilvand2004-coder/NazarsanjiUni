@@ -2,10 +2,29 @@
 {% block title %}دوره‌های مطلوبیت‌ها{% endblock %}
 
 {% block content %}
+<style>
+    .date-jalali {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 10px;
+        padding: 8px 14px;
+        color: var(--text-1);
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .date-jalali:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+</style>
+
 <div class="admin-header">
     <div>
         <h1>📅 دوره‌های زمانی ثبت مطلوبیت‌ها</h1>
-        <div class="breadcrumb">خانه / مدیریت / دوره‌های مطلوبیت</div>
+        <div class="breadcrumb">خانه / اطلاعات پایه / دوره‌های مطلوبیت</div>
     </div>
     <div class="actions">
         <a href="{{ url_for('admin_preferences') }}" class="btn btn-ghost btn-sm">← بازگشت</a>
@@ -33,7 +52,7 @@
 <div class="card" style="margin-bottom:20px;">
     <div class="card-header"><div class="card-title">➕ افزودن دوره جدید</div></div>
     <div style="padding:20px;">
-        <form method="POST" action="{{ url_for('admin_preference_periods_add') }}">
+        <form method="POST" action="{{ url_for('admin_preference_periods_add') }}" id="period-form">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
                 <div>
                     <label class="form-label">نام دوره *</label>
@@ -44,16 +63,16 @@
                     <input type="text" name="semester" class="form-input" placeholder="مثلاً: مهر ۱۴۰۵">
                 </div>
                 <div>
-                    <label class="form-label">تاریخ شروع *</label>
-                    <input type="date" name="start_date" class="form-input" required>
+                    <label class="form-label">تاریخ شروع (شمسی) *</label>
+                    <input type="text" name="start_date" id="start_date" class="date-jalali" placeholder="مثلاً: ۱۴۰۵/۰۸/۰۱" required>
                 </div>
                 <div>
-                    <label class="form-label">تاریخ پایان *</label>
-                    <input type="date" name="end_date" class="form-input" required>
+                    <label class="form-label">تاریخ پایان (شمسی) *</label>
+                    <input type="text" name="end_date" id="end_date" class="date-jalali" placeholder="مثلاً: ۱۴۰۵/۰۸/۳۱" required>
                 </div>
                 <div>
-                    <label class="form-label">مهلت نهایی</label>
-                    <input type="date" name="deadline" class="form-input">
+                    <label class="form-label">مهلت نهایی (شمسی)</label>
+                    <input type="text" name="deadline" id="deadline" class="date-jalali" placeholder="مثلاً: ۱۴۰۵/۰۸/۱۵">
                 </div>
                 <div style="display:flex;align-items:center;gap:10px;padding-top:30px;">
                     <input type="checkbox" name="is_active" value="1" style="width:20px;height:20px;accent-color:var(--accent);">
@@ -111,4 +130,31 @@
         </table>
     </div>
 </div>
+
+<!-- Persian Date Picker -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@latest/dist/css/persian-datepicker.min.css">
+<script src="https://cdn.jsdelivr.net/npm/persian-datepicker@latest/dist/js/persian-datepicker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/persian-date@latest/dist/persian-date.min.js"></script>
+<script>
+$(document).ready(function() {
+    $("#start_date").persianDatepicker({
+        format: 'YYYY/MM/DD',
+        autoClose: true,
+        initialValue: false,
+        observer: true,
+    });
+    $("#end_date").persianDatepicker({
+        format: 'YYYY/MM/DD',
+        autoClose: true,
+        initialValue: false,
+        observer: true,
+    });
+    $("#deadline").persianDatepicker({
+        format: 'YYYY/MM/DD',
+        autoClose: true,
+        initialValue: false,
+        observer: true,
+    });
+});
+</script>
 {% endblock %}

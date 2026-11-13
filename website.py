@@ -1467,6 +1467,12 @@ def admin_preferences():
         return render_template("admin/preferences_unavailable.html", admin=g.admin)
     # اگر استاد است، فقط مطلوبیت‌های خودش را ببیند
     if g.admin.get("role") == "instructor":
+        # بررسی دوره فعال
+        active_period = None
+        if PREFERENCES_AVAILABLE:
+            active_period = prefs_module.get_active_preference_period(db)
+        if not active_period:
+            flash("⚠️ در حال حاضر هیچ دوره فعالی برای ثبت مطلوبیت‌ها وجود ندارد. لطفاً بعداً مراجعه کنید.", "warning")
         instructor_username = g.admin.get("username", "")
         all_teaching = prefs_module.get_all_teaching_preferences(db)
         teaching_items = [p for p in all_teaching if p.get("instructor_username") == instructor_username
@@ -2812,6 +2818,14 @@ def instructor_change_password():
         return redirect(url_for("admin_preferences"))
 
     return render_template("instructor/change_password.html", admin=g.admin)
+
+
+@app.route("/instructor/logout")
+def instructor_logout():
+    """خروج استاد — هدایت به صفحه ورود استاد."""
+    session.pop("admin", None)
+    flash("با موفقیت خارج شدید.", "success")
+    return redirect(url_for("instructor_login"))
 
 
 # ==================================================
