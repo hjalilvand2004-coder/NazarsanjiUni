@@ -161,6 +161,8 @@ def ensure_preferences_tables(db):
 
 def get_all_teaching_preferences(db, term_code=None, instructor_code=None):
     """گرفتن همه مطلوبیت‌های تدریس با فیلتر اختیاری."""
+    # اطمینان از وجود جدول
+    ensure_preferences_tables(db)
     query = "SELECT * FROM teaching_preferences WHERE 1=1"
     params = []
     if term_code:
@@ -180,6 +182,8 @@ def create_teaching_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int],
     """ساخت مطلوبیت تدریس — نرمال‌سازی کدها قبل از ذخیره.
     از کانکشن مستقیم sqlite3 استفاده می‌کند تا last_insert_rowid درست کار کند."""
     import sqlite3 as _sqlite3
+    # اطمینان از وجود جدول
+    ensure_preferences_tables(db)
     # نرمال‌سازی
     unique_code = normalize_code(data.get("unique_course_code", ""))
     instructor_code = normalize_instructor_code(data.get("instructor_code", ""))
@@ -260,6 +264,8 @@ def delete_teaching_preference(db, pref_id: int) -> Tuple[bool, Optional[str]]:
 
 def get_all_time_preferences(db, instructor_code=None, day=None):
     """گرفتن همه مطلوبیت‌های زمان‌بندی."""
+    # اطمینان از وجود جدول
+    ensure_preferences_tables(db)
     query = "SELECT * FROM time_preferences WHERE 1=1"
     params = []
     if instructor_code:
@@ -279,6 +285,8 @@ def create_time_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int], Opt
     """ساخت مطلوبیت زمان‌بندی.
     از کانکشن مستقیم sqlite3 استفاده می‌کند تا last_insert_rowid درست کار کند."""
     import sqlite3 as _sqlite3
+    # اطمینان از وجود جدول
+    ensure_preferences_tables(db)
     start_time = data.get("start_time", "")
     end_time = data.get("end_time", "")
     # تعیین گروه زمانی به‌صورت خودکار
