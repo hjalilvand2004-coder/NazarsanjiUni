@@ -150,8 +150,24 @@ def ensure_preferences_tables(db):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_time_pref_inst ON time_preferences(instructor_code)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_time_pref_day ON time_preferences(day)")
 
+        # جدول دوره‌های زمانی ثبت مطلوبیت‌ها
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS preference_periods (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                semester TEXT,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                deadline TEXT,
+                is_active INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pref_periods_active ON preference_periods(is_active)")
+
         conn.commit()
-        logger.info("✓ teaching_preferences and time_preferences tables ensured")
+        logger.info("✓ preferences tables ensured (teaching + time + periods)")
     return True
 
 
@@ -251,11 +267,21 @@ def update_teaching_preference(db, pref_id: int, data: Dict[str, Any]) -> Tuple[
 
 def delete_teaching_preference(db, pref_id: int) -> Tuple[bool, Optional[str]]:
     """حذف مطلوبیت تدریس."""
-    existing = db.execute_query("SELECT id FROM teaching_preferences WHERE id = ?", (pref_id,))
-    if not existing:
-        return False, "رکورد پیدا نشد"
-    db.execute_query("DELETE FROM teaching_preferences WHERE id = ?", (pref_id,))
-    return True, None
+    import sqlite3 as _sqlite3
+    ensure_preferences_tables(db)
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM teaching_preferences WHERE id = ?", (pref_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False, "رکورد پیدا نشد"
+        cursor.execute("DELETE FROM teaching_preferences WHERE id = ?", (pref_id,))
+        conn.commit()
+        conn.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 
 # ==================================================
@@ -283,7 +309,8 @@ def get_all_time_preferences(db, instructor_code=None, day=None):
 
 def create_time_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional[str]]:
     """ساخت مطلوبیت زمان‌بندی.
-    از کانکشن مستقیم sqlite3 استفاده می‌کند تا last_insert_rowid درست کار کند."""
+    - جلوگیری از ثبت تکراری (همان استاد + روز + بازه)
+    - اولویت‌بندی خودکار بر اساس ترتیب زمانی"""
     import sqlite3 as _sqlite3
     # اطمینان از وجود جدول
     ensure_preferences_tables(db)
@@ -294,30 +321,77 @@ def create_time_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int], Opt
         period, _ = get_period_for_time(start_time)
         data["time_group"] = period
 
-    query = """
-        INSERT INTO time_preferences
-            (day, cooperation_type, end_time, expert_group, row_number,
-             status, instructor_code, instructor_name, instructor_username,
-             start_time, time_group, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """
-    params = (
-        data.get("day", ""),
-        data.get("cooperation_type", ""),
-        end_time,
-        data.get("expert_group", ""),
-        data.get("row_number") or 0,
-        1 if data.get("status", True) else 0,
-        normalize_instructor_code(data.get("instructor_code", "")),
-        data.get("instructor_name", ""),
-        data.get("instructor_username", ""),
-        start_time,
-        data.get("time_group", "morning"),
-        data.get("priority") or 0,
-    )
+    instructor_code = normalize_instructor_code(data.get("instructor_code", ""))
+    day = data.get("day", "")
+    time_group = data.get("time_group", "morning")
+
     try:
         conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        conn.row_factory = _sqlite3.Row
         cursor = conn.cursor()
+
+        # بررسی تکراری بودن (همان استاد + روز + بازه زمانی)
+        existing = cursor.execute(
+            "SELECT id FROM time_preferences WHERE instructor_code = ? AND day = ? AND time_group = ?",
+            (instructor_code, day, time_group)
+        ).fetchone()
+        if existing:
+            conn.close()
+            return None, f"زمان تکراری: این بازه برای {day} - {time_group} قبلاً ثبت شده است."
+
+        # محاسبه اولویت بر اساس ترتیب زمانی
+        # تبدیل روز به عدد برای مرتب‌سازی
+        DAY_NUMS = {"شنبه": 0, "یکشنبه": 1, "دوشنبه": 2, "سه‌شنبه": 3, "چهارشنبه": 4, "پنجشنبه": 5}
+        day_num = DAY_NUMS.get(day, 6)
+        PERIOD_ORDER = {"morning": 0, "noon": 1, "afternoon": 2}
+        period_order = PERIOD_ORDER.get(time_group, 3)
+
+        # گرفتن همه زمان‌های موجود این استاد
+        existing_times = cursor.execute(
+            "SELECT id, day, time_group FROM time_preferences WHERE instructor_code = ? ORDER BY id",
+            (instructor_code,)
+        ).fetchall()
+
+        # محاسبه اولویت جدید: جایگاه زمانی جدید در ترتیب مرتب
+        all_slots = []
+        for row in existing_times:
+            r = dict(row)
+            d_num = DAY_NUMS.get(r["day"], 6)
+            p_order = PERIOD_ORDER.get(r["time_group"], 3)
+            all_slots.append((d_num * 10 + p_order, r["id"]))
+        # اضافه کردن زمان جدید
+        new_sort_key = day_num * 10 + period_order
+        all_slots.append((new_sort_key, None))
+        # مرتب‌سازی بر اساس sort_key
+        all_slots.sort(key=lambda x: x[0])
+        # اولویت = جایگاه در لیست مرتب شده + 1
+        priority = 1
+        for sort_key, slot_id in all_slots:
+            if slot_id is None:
+                break
+            priority += 1
+
+        query = """
+            INSERT INTO time_preferences
+                (day, cooperation_type, end_time, expert_group, row_number,
+                 status, instructor_code, instructor_name, instructor_username,
+                 start_time, time_group, priority)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        params = (
+            day,
+            data.get("cooperation_type", ""),
+            end_time,
+            data.get("expert_group", ""),
+            data.get("row_number") or 0,
+            1 if data.get("status", True) else 0,
+            instructor_code,
+            data.get("instructor_name", ""),
+            data.get("instructor_username", ""),
+            start_time,
+            time_group,
+            priority,
+        )
         cursor.execute(query, params)
         conn.commit()
         pref_id = cursor.lastrowid
@@ -365,11 +439,21 @@ def update_time_preference(db, pref_id: int, data: Dict[str, Any]) -> Tuple[bool
 
 def delete_time_preference(db, pref_id: int) -> Tuple[bool, Optional[str]]:
     """حذف مطلوبیت زمان‌بندی."""
-    existing = db.execute_query("SELECT id FROM time_preferences WHERE id = ?", (pref_id,))
-    if not existing:
-        return False, "رکورد پیدا نشد"
-    db.execute_query("DELETE FROM time_preferences WHERE id = ?", (pref_id,))
-    return True, None
+    import sqlite3 as _sqlite3
+    ensure_preferences_tables(db)
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM time_preferences WHERE id = ?", (pref_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False, "رکورد پیدا نشد"
+        cursor.execute("DELETE FROM time_preferences WHERE id = ?", (pref_id,))
+        conn.commit()
+        conn.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 
 # ==================================================
@@ -757,3 +841,80 @@ def get_match_status(item: Dict[str, Any], teaching_lookup: Dict, time_lookup: D
         return "partial"
     else:
         return "none"
+
+# ==================================================
+# دوره‌های زمانی ثبت مطلوبیت‌ها
+# ==================================================
+
+def get_active_preference_period(db):
+    """گرفتن دوره فعال مطلوبیت‌ها."""
+    ensure_preferences_tables(db)
+    rows = db.execute_query("SELECT * FROM preference_periods WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
+    if not rows:
+        return None
+    return dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+
+
+def get_all_preference_periods(db):
+    """گرفتن همه دوره‌های مطلوبیت‌ها."""
+    ensure_preferences_tables(db)
+    rows = db.execute_query("SELECT * FROM preference_periods ORDER BY id DESC")
+    if not rows:
+        return []
+    return [dict(r) if not isinstance(r, dict) else r for r in rows]
+
+
+def create_preference_period(db, data):
+    """ساخت دوره جدید مطلوبیت‌ها."""
+    import sqlite3 as _sqlite3
+    ensure_preferences_tables(db)
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO preference_periods (name, semester, start_date, end_date, deadline, is_active) VALUES (?, ?, ?, ?, ?, ?)",
+            (data.get("name", ""), data.get("semester", ""),
+             data.get("start_date", ""), data.get("end_date", ""),
+             data.get("deadline", ""), 1 if data.get("is_active") else 0)
+        )
+        if data.get("is_active"):
+            period_id = cursor.lastrowid
+            cursor.execute("UPDATE preference_periods SET is_active = 0 WHERE id != ?", (period_id,))
+        conn.commit()
+        period_id = cursor.lastrowid
+        conn.close()
+        return period_id, None
+    except Exception as e:
+        return None, str(e)
+
+
+def activate_preference_period(db, period_id):
+    """فعال‌سازی یک دوره مطلوبیت‌ها."""
+    import sqlite3 as _sqlite3
+    ensure_preferences_tables(db)
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE preference_periods SET is_active = 0")
+        cursor.execute("UPDATE preference_periods SET is_active = 1 WHERE id = ?", (period_id,))
+        conn.commit()
+        conn.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def delete_preference_period(db, period_id):
+    """حذف دوره مطلوبیت‌ها."""
+    import sqlite3 as _sqlite3
+    ensure_preferences_tables(db)
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM preference_periods WHERE id = ?", (period_id,))
+        conn.commit()
+        conn.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+

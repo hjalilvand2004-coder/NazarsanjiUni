@@ -1005,23 +1005,23 @@ async function deleteTeaching(id) {
 }
 
 async function editTime(id) {
-    const items = await (await fetch('/api/time-preferences')).json();
-    const item = items.items.find(i => i.id === id);
-    if (!item) return;
-    const newPriority = prompt('اولویت جدید:', item.priority || 0);
-    if (newPriority === null) return;
-    const r = await fetch(`/api/time-preferences/${id}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({priority: parseInt(newPriority), day: item.day, instructor_name: item.instructor_name, instructor_code: item.instructor_code, start_time: item.start_time, end_time: item.end_time, time_group: item.time_group, status: item.status})
-    });
-    if ((await r.json()).ok) location.reload();
+    // باز کردن Time Picker برای ویرایش
+    await openTimePicker();
 }
 
 async function deleteTime(id) {
-    if (!confirm('حذف شود؟')) return;
-    const r = await fetch(`/api/time-preferences/${id}`, {method:'DELETE'});
-    if ((await r.json()).ok) location.reload();
+    if (!confirm('آیا از حذف این زمان مطلوب مطمئن هستید؟')) return;
+    try {
+        const r = await fetch(`/api/time-preferences/${id}`, {method:'DELETE'});
+        const res = await r.json();
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert('خطا در حذف: ' + (res.error || 'نامشخص'));
+        }
+    } catch (e) {
+        alert('خطا: ' + e.message);
+    }
 }
 
 async function uploadTeachingExcel(input) {
