@@ -87,6 +87,12 @@
                 مطلوبیت‌های اساتید
                 {% if admin.role == 'instructor' %}<span style="font-size:9px;background:rgba(16,185,129,0.15);color:#10b981;padding:1px 6px;border-radius:4px;margin-right:6px;">کامل</span>{% endif %}
             </a>
+            {% if admin.role != 'instructor' %}
+            <a href="{{ url_for('admin_preferences_reports') }}" class="sidebar-link {% if request.endpoint == 'admin_preferences_reports' %}active{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>
+                گزارش مطلوبیت‌ها
+            </a>
+            {% endif %}
             {% if admin.role == 'super_admin' %}
             <a href="{{ url_for('admin_admins') }}" class="sidebar-link {% if request.endpoint == 'admin_admins' %}active{% endif %}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>

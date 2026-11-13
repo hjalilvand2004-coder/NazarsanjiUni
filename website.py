@@ -2808,6 +2808,173 @@ def instructor_change_password():
 
 
 # ==================================================
+# ===== [v3.13.0] گزارش‌های مطلوبیت‌ها =====
+# ==================================================
+
+@app.route("/admin/preferences-reports")
+@login_required
+def admin_preferences_reports():
+    """گزارش‌های مطلوبیت‌های اساتید."""
+    if not PREFERENCES_AVAILABLE:
+        return render_template("admin/preferences_unavailable.html", admin=g.admin)
+    
+    # آمار کلی
+    teaching_items = prefs_module.get_all_teaching_preferences(db)
+    time_items = prefs_module.get_all_time_preferences(db)
+    
+    # الف) آمار ثبت فراوانی اساتید
+    total_instructors = 0
+    if INSTRUCTORS_AVAILABLE:
+        inst_rows = db.execute_query("SELECT COUNT(*) AS c FROM instructors")
+        total_instructors = inst_rows[0]["c"] if inst_rows else 0
+    
+    instructors_with_teaching = set()
+    for p in teaching_items:
+        code = p.get("instructor_code") or p.get("instructor_username")
+        if code:
+            instructors_with_teaching.add(code)
+    
+    instructors_with_time = set()
+    for p in time_items:
+        code = p.get("instructor_code") or p.get("instructor_username")
+        if code:
+            instructors_with_time.add(code)
+    
+    instructors_with_any = instructors_with_teaching | instructors_with_time
+    instructors_without = total_instructors - len(instructors_with_any)
+    
+    # ب) فراوانی درس‌ها
+    course_freq = {}
+    for p in teaching_items:
+        course_name = p.get("course_name") or "نامشخص"
+        course_freq[course_name] = course_freq.get(course_name, 0) + 1
+    
+    top_courses = sorted(course_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    # درس‌های بدون استاد
+    all_course_codes = set()
+    for p in teaching_items:
+        if p.get("unique_course_code"):
+            all_course_codes.add(p["unique_course_code"])
+    
+    unique_courses_rows = db.execute_query("SELECT unique_code, title FROM unique_courses WHERE is_active = 1") or []
+    courses_without_instructor = []
+    for c in unique_courses_rows:
+        c_dict = dict(c) if not isinstance(c, dict) else c
+        if str(c_dict.get("unique_code", "")) not in [str(x) for x in all_course_codes]:
+            courses_without_instructor.append(c_dict.get("title", "نامشخص"))
+    
+    # ب) فراوانی زمان‌ها
+    time_freq = {}
+    for p in time_items:
+        day = p.get("day") or "نامشخص"
+        period = p.get("time_group") or "نامشخص"
+        key = f"{day} - {period}"
+        time_freq[key] = time_freq.get(key, 0) + 1
+    
+    top_times = sorted(time_freq.items(), key=lambda x: x[1], reverse=True)
+    
+    # د) روند روزانه ثبت
+    daily_trend = {}
+    for p in teaching_items + time_items:
+        created = p.get("created_at") or ""
+        if created:
+            day = created[:10]
+            daily_trend[day] = daily_trend.get(day, 0) + 1
+    
+    daily_trend_sorted = sorted(daily_trend.items())
+    
+    # ی) داده‌های نمودار حرارتی (روز × بازه)
+    days = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه"]
+    periods = ["morning", "noon", "afternoon"]
+    period_labels = {"morning": "صبح", "noon": "ظهر", "afternoon": "بعدازظهر"}
+    heatmap = {}
+    for d in days:
+        for p in periods:
+            key = f"{d}|{p}"
+            heatmap[key] = 0
+    for p in time_items:
+        day = p.get("day") or ""
+        period = p.get("time_group") or "morning"
+        key = f"{day}|{period}"
+        if key in heatmap:
+            heatmap[key] += 1
+    
+    return render_template(
+        "admin/preferences_reports.html",
+        admin=g.admin,
+        total_instructors=total_instructors,
+        instructors_with_teaching=len(instructors_with_teaching),
+        instructors_with_time=len(instructors_with_time),
+        instructors_without=instructors_without,
+        total_teaching=len(teaching_items),
+        total_time=len(time_items),
+        top_courses=top_courses,
+        courses_without_instructor=courses_without_instructor,
+        top_times=top_times,
+        daily_trend=daily_trend_sorted,
+        heatmap=heatmap,
+        days=days,
+        periods=periods,
+        period_labels=period_labels,
+    )
+
+
+@app.route("/admin/preferences-reports/export-teaching")
+@login_required
+def admin_preferences_export_teaching():
+    """خروجی اکسل مطلوبیت‌های تدریس."""
+    if not PREFERENCES_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    import io
+    try:
+        import pandas as pd
+    except ImportError:
+        return jsonify({"ok": False, "error": "pandas not installed"}), 500
+    items = prefs_module.get_all_teaching_preferences(db)
+    df = pd.DataFrame(items)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='مطلوبیت‌های تدریس', index=False)
+    output.seek(0)
+    return make_response(
+        output.read(),
+        200,
+        {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename=teaching_preferences.xlsx'
+        }
+    )
+
+
+@app.route("/admin/preferences-reports/export-time")
+@login_required
+def admin_preferences_export_time():
+    """خروجی اکسل مطلوبیت‌های زمان."""
+    if not PREFERENCES_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    import io
+    try:
+        import pandas as pd
+    except ImportError:
+        return jsonify({"ok": False, "error": "pandas not installed"}), 500
+    items = prefs_module.get_all_time_preferences(db)
+    df = pd.DataFrame(items)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='مطلوبیت‌های زمان', index=False)
+    output.seek(0)
+    return make_response(
+        output.read(),
+        200,
+        {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename=time_preferences.xlsx'
+        }
+    )
+
+
+# ==================================================
 # Mobile App (دانشجو360 — PWA) — جدید v2.6.0
 # ==================================================
 

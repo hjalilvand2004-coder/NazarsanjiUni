@@ -292,11 +292,11 @@ def get_period_for_time(start_time):
         # صبح: 7:30 (450) تا 12:30 (750)
         if 450 <= total <= 750:
             return "morning", "صبح"
-        # ظهر: 13:00 (780) تا 16:00 (960)
-        elif 780 <= total < 960:
+        # ظهر: 13:00 (780) تا 16:30 (990)
+        elif 780 <= total < 990:
             return "noon", "ظهر"
-        # بعدازظهر: 16:00 (960) تا 20:00 (1200)
-        elif 960 <= total <= 1200:
+        # بعدازظهر: 16:30 (990) تا 20:30 (1230)
+        elif 990 <= total <= 1230:
             return "afternoon", "بعدازظهر"
         else:
             # خارج از بازه‌ها — پیش‌فرض صبح
@@ -323,17 +323,17 @@ TIME_PERIODS = {
         "title": "ظهر",
         "title_fa": "ظهر",
         "start": "13:00",
-        "end": "16:00",
+        "end": "16:30",
         "icon": "☀️",
-        "description": "از ۱۳:۰۰ تا ۱۶:۰۰",
+        "description": "از ۱۳:۰۰ تا ۱۶:۳۰",
     },
     "afternoon": {
         "title": "بعدازظهر",
         "title_fa": "بعدازظهر",
-        "start": "16:00",
-        "end": "20:00",
+        "start": "16:30",
+        "end": "20:30",
         "icon": "🌆",
-        "description": "از ۱۶:۰۰ تا ۲۰:۰۰",
+        "description": "از ۱۶:۳۰ تا ۲۰:۳۰",
     },
 }
 

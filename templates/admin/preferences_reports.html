@@ -1,0 +1,149 @@
+{% extends "admin/base.html" %}
+{% block title %}گزارش‌های مطلوبیت‌ها{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>📊 گزارش‌های مطلوبیت‌ها</h1>
+        <div class="breadcrumb">خانه / گزارش‌ها / مطلوبیت‌ها</div>
+    </div>
+    <div class="actions">
+        <a href="{{ url_for('admin_preferences_export_teaching') }}" class="btn btn-ghost btn-sm">📥 خروجی اکسل تدریس</a>
+        <a href="{{ url_for('admin_preferences_export_time') }}" class="btn btn-ghost btn-sm">📥 خروجی اکسل زمان</a>
+        <a href="{{ url_for('admin_preferences') }}" class="btn btn-ghost btn-sm">← بازگشت</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+{% endwith %}
+
+<!-- الف) آمار کلی اساتید -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><div class="card-title">الف) آمار ثبت فراوانی اساتید</div></div>
+    <div style="padding:20px;">
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:0;">
+            <div class="stat-card">
+                <div class="stat-label">کل اساتید</div>
+                <div class="stat-value">{{ total_instructors }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">ثبت مطلوبیت تدریس</div>
+                <div class="stat-value" style="color:var(--success);">{{ instructors_with_teaching }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">ثبت مطلوبیت زمان</div>
+                <div class="stat-value" style="color:var(--accent);">{{ instructors_with_time }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">بدون ثبت</div>
+                <div class="stat-value" style="color:var(--danger);">{{ instructors_without }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ب) فراوانی درس‌ها -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><div class="card-title">ب) فراوانی درس‌های انتخابی</div></div>
+    <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div>
+            <h4 style="font-size:13px;margin-bottom:10px;">پرتقاضاترین درس‌ها</h4>
+            <table class="table">
+                <thead><tr><th>درس</th><th>تعداد استاد</th></tr></thead>
+                <tbody>
+                    {% for course, count in top_courses %}
+                    <tr><td>{{ course }}</td><td><span class="badge badge-primary">{{ count }}</span></td></tr>
+                    {% else %}
+                    <tr><td colspan="2" style="text-align:center;color:var(--text-3);">داده‌ای موجود نیست</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <h4 style="font-size:13px;margin-bottom:10px;">دروس بدون استاد ({{ courses_without_instructor|length }})</h4>
+            <div style="max-height:300px;overflow-y:auto;">
+                {% for course in courses_without_instructor %}
+                <div style="padding:6px 10px;border-bottom:1px solid var(--glass-border);font-size:12px;">{{ course }}</div>
+                {% else %}
+                <p style="color:var(--text-3);text-align:center;padding:20px;">همه درس‌ها استاد دارند</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ب) فراوانی زمان‌ها -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><div class="card-title">ب) فراوانی زمان‌های انتخابی</div></div>
+    <div style="padding:20px;">
+        <table class="table">
+            <thead><tr><th>روز - بازه</th><th>تعداد استاد</th></tr></thead>
+            <tbody>
+                {% for time_key, count in top_times %}
+                <tr><td>{{ time_key }}</td><td><span class="badge badge-info">{{ count }}</span></td></tr>
+                {% else %}
+                <tr><td colspan="2" style="text-align:center;color:var(--text-3);">داده‌ای موجود نیست</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- د) روند روزانه -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><div class="card-title">د) روند روزانه ثبت مطلوبیت‌ها</div></div>
+    <div style="padding:20px;">
+        {% if daily_trend %}
+        <div style="display:flex;gap:4px;align-items:flex-end;height:120px;">
+            {% for day, count in daily_trend %}
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                <div style="width:30px;background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:4px 4px 0 0;height:{{ count * 10 }}px;min-height:4px;" title="{{ day }}: {{ count }}"></div>
+                <small style="font-size:9px;color:var(--text-3);">{{ day[5:] }}</small>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:var(--text-3);text-align:center;padding:20px;">داده‌ای موجود نیست</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ی) نمودار حرارتی روز × بازه -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><div class="card-title">ی) نمودار حرارتی روزهای هفته × بازه زمانی</div></div>
+    <div style="padding:20px;overflow-x:auto;">
+        <table class="table" style="text-align:center;">
+            <thead>
+                <tr>
+                    <th>روز</th>
+                    {% for p in periods %}<th>{{ period_labels[p] }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for day in days %}
+                <tr>
+                    <td style="font-weight:600;">{{ day }}</td>
+                    {% for p in periods %}
+                    {% set key = day + '|' + p %}
+                    {% set count = heatmap.get(key, 0) %}
+                    {% set intensity = (count * 25) if count > 0 else 0 %}
+                    <td style="background: {% if count > 0 %}rgba(99,102,241,{{ 0.15 + (count * 0.1) if count <= 8 else 0.85 }}){% else %}transparent{% endif %};border-radius:6px;font-weight:{% if count > 0 %}700{% else %}400{% endif %};color:{% if count > 5 %}#fff{% else %}var(--text-2){% endif %};">
+                        {{ count }}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-3);">
+            <span>کم</span>
+            <div style="width:120px;height:12px;background:linear-gradient(90deg,rgba(99,102,241,0.15),rgba(99,102,241,0.85));border-radius:6px;"></div>
+            <span>زیاد</span>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -202,8 +202,9 @@
         box-shadow: 0 2px 8px rgba(99,102,241,0.15);
     }
     .course-pick-card.selected {
-        background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(79,70,229,0.05));
-        border-color: #6366f1;
+        background: linear-gradient(135deg, rgba(56,189,248,0.18), rgba(14,165,233,0.08));
+        border-color: #0ea5e9;
+        box-shadow: 0 2px 8px rgba(14,165,233,0.15);
     }
     .course-pick-card .course-check {
         display: flex;
@@ -450,7 +451,7 @@
             <button onclick="closeCoursePicker()" class="close-btn">✕</button>
         </div>
         <div style="padding:20px 28px;overflow-y:auto;flex:1;">
-            <input type="text" id="course-search-input" class="form-input" placeholder="🔍 جستجوی درس..." style="width:100%;margin-bottom:14px;" oninput="filterCourseList()">
+            <input type="text" id="course-search-input" placeholder="🔍 جستجوی درس..." style="width:100%;margin-bottom:14px;padding:10px 14px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:13px;color:#0f172a;background:#ffffff;font-family:inherit;" oninput="filterCourseList()">
             <div id="course-groups-container">
                 <!-- پر می‌شود -->
             </div>
@@ -508,13 +509,13 @@
                             <div class="period-check">✓</div>
                             <div class="period-icon">☀️</div>
                             <div class="period-title">ظهر</div>
-                            <div class="period-desc">از ۱۳:۰۰ تا ۱۶:۰۰</div>
+                            <div class="period-desc">از ۱۳:۰۰ تا ۱۶:۳۰</div>
                         </div>
                         <div class="period-card" data-period="afternoon" onclick="selectPeriod('afternoon', this)">
                             <div class="period-check">✓</div>
                             <div class="period-icon">🌆</div>
                             <div class="period-title">بعدازظهر</div>
-                            <div class="period-desc">از ۱۶:۰۰ تا ۲۰:۰۰</div>
+                            <div class="period-desc">از ۱۶:۳۰ تا ۲۰:۳۰</div>
                         </div>
                     </div>
                     <div style="margin-top:14px;padding:12px;background:#dbeafe;border-radius:10px;font-size:12px;color:#1e40af;">
@@ -562,8 +563,8 @@ function showToast(msg) {
 // تعریف بازه‌های زمانی
 const PERIODS = {
     morning: { title: 'صبح', start: '07:30', end: '12:30' },
-    noon: { title: 'ظهر', start: '13:00', end: '16:00' },
-    afternoon: { title: 'بعدازظهر', start: '16:00', end: '20:00' }
+    noon: { title: 'ظهر', start: '13:00', end: '16:30' },
+    afternoon: { title: 'بعدازظهر', start: '16:30', end: '20:30' }
 };
 
 function switchTab(tab) {
@@ -605,6 +606,26 @@ async function openCoursePicker() {
             courseGroups = {};
             allCourses = [];
         }
+    }
+    // بارگذاری مطلوبیت‌های تدریس قبلی
+    try {
+        const r = await fetch('/api/teaching-preferences');
+        const data = await r.json();
+        if (data.ok && data.items) {
+            // علامت‌گذاری دروس قبلی
+            data.items.forEach(p => {
+                const courseCode = p.unique_course_code;
+                if (courseCode) {
+                    const course = allCourses.find(c => c.unique_code == courseCode);
+                    if (course) {
+                        const id = course.id || course.unique_code;
+                        selectedCourses.add(id);
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.log('Could not load existing preferences:', e);
     }
     renderCourseGroups();
     updateCourseCount();
@@ -800,6 +821,33 @@ async function openTimePicker() {
     document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.period-card').forEach(c => c.classList.remove('selected'));
     document.getElementById('periods-section').style.display = 'none';
+    
+    // بارگذاری زمان‌های قبلی
+    try {
+        const r = await fetch('/api/time-preferences');
+        const data = await r.json();
+        if (data.ok && data.items) {
+            data.items.forEach(p => {
+                const period = p.time_group || 'morning';
+                const periodInfo = PERIODS[period];
+                if (periodInfo) {
+                    selectedSlots.push({
+                        day: p.day,
+                        period: period,
+                        period_title: periodInfo.title,
+                        start_time: p.start_time || periodInfo.start,
+                        end_time: p.end_time || periodInfo.end,
+                        priority: p.priority || (selectedSlots.length + 1),
+                    });
+                }
+            });
+            // بازشماری اولویت‌ها
+            selectedSlots.forEach((s, i) => s.priority = i + 1);
+        }
+    } catch (e) {
+        console.log('Could not load existing time preferences:', e);
+    }
+    
     renderSelections();
 }
 
