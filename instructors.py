@@ -613,6 +613,7 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
     """
     افزودن اساتید به جدول authorized_users (با نقش instructor) اگر قبلاً ثبت نشده‌اند.
     مهم: نام کاربری و رمز عبور یکسان هستند (رمز = نام کاربری هر استاد).
+    از کانکشن مستقیم sqlite3 استفاده می‌کند تا از مشکلات execute_query با PRAGMA جلوگیری کند.
     """
     from src.database import hash_password
 
@@ -625,66 +626,97 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
     errors = []
     debug_info = []
 
-    # گرفتن لیست username های موجود برای جلوگیری از تکرار
-    existing_usernames = set()
-    try:
-        existing_rows = db.execute_query("SELECT student_number FROM authorized_users WHERE student_number IS NOT NULL")
-        for r in (existing_rows or []):
-            existing_usernames.add(r["student_number"] if isinstance(r, dict) else r[0])
-    except Exception as e:
-        debug_info.append(f"خطا در خواندن usernames: {e}")
+    # استفاده از کانکشن مستقیم sqlite3 برای PRAGMA و INSERT
+    import sqlite3 as _sqlite3
+    conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+    conn.row_factory = _sqlite3.Row
+    cursor = conn.cursor()
 
-    # گرفتن لیست phone های موجود برای جلوگیری از duplicate UNIQUE
+    # 1. بررسی schema با کانکشن مستقیم
+    try:
+        cursor.execute("PRAGMA table_info(authorized_users)")
+        cols = cursor.fetchall()
+        col_names = [c["name"] for c in cols] if cols else []
+        debug_info.append(f"ستون‌های authorized_users: {col_names}")
+    except Exception as e:
+        debug_info.append(f"خطا در بررسی schema: {e}")
+        conn.close()
+        return {"ok": False, "message": f"خطا در بررسی schema: {e}", "debug_info": debug_info, "total": len(instructors)}
+
+    # 2. افزودن ستون user_type اگر وجود ندارد
+    if "user_type" not in col_names:
+        debug_info.append("⚠️ ستون user_type وجود ندارد — تلاش برای افزودن")
+        try:
+            cursor.execute("ALTER TABLE authorized_users ADD COLUMN user_type TEXT DEFAULT 'student'")
+            conn.commit()
+            debug_info.append("✓ ستون user_type اضافه شد")
+            col_names.append("user_type")
+        except Exception as e:
+            debug_info.append(f"❌ خطا در افزودن user_type: {e}")
+
+    # 3. بررسی CHECK constraint قدیمی روی role
+    try:
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='authorized_users'")
+        schema_row = cursor.fetchone()
+        if schema_row and "CHECK(role IN" in (schema_row[0] or ""):
+            debug_info.append("⚠️ CHECK constraint قدیمی روی role وجود دارد — بازسازی جدول")
+            # بازسازی جدول بدون CHECK constraint
+            try:
+                cursor.execute("PRAGMA foreign_keys=OFF")
+                cursor.execute("CREATE TABLE IF NOT EXISTS authorized_users_new (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, display_phone TEXT NOT NULL, normalized_phone TEXT NOT NULL UNIQUE, student_number TEXT UNIQUE, student_type TEXT CHECK(student_type IN('پیوسته','ناپیوسته')), role TEXT DEFAULT 'user', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, bale_id INTEGER, last_seen TIMESTAMP, is_blocked INTEGER DEFAULT 0, first_channel TEXT, password_hash TEXT, user_type TEXT DEFAULT 'student')")
+                cursor.execute("INSERT INTO authorized_users_new (id, name, display_phone, normalized_phone, student_number, student_type, role, created_at, bale_id, last_seen, is_blocked, first_channel, password_hash, user_type) SELECT id, name, display_phone, normalized_phone, student_number, student_type, role, created_at, bale_id, last_seen, is_blocked, first_channel, password_hash, COALESCE(user_type, 'student') FROM authorized_users")
+                cursor.execute("DROP TABLE authorized_users")
+                cursor.execute("ALTER TABLE authorized_users_new RENAME TO authorized_users")
+                cursor.execute("PRAGMA foreign_keys=ON")
+                conn.commit()
+                debug_info.append("✓ جدول بازسازی شد — CHECK constraint قدیمی حذف شد")
+            except Exception as e:
+                debug_info.append(f"❌ خطا در بازسازی جدول: {e}")
+                try:
+                    conn.rollback()
+                    cursor.execute("PRAGMA foreign_keys=ON")
+                except Exception:
+                    pass
+    except Exception as e:
+        debug_info.append(f"خطا در بررسی schema برای CHECK: {e}")
+
+    # 4. گرفتن لیست usernames و phones موجود
+    existing_usernames = set()
     existing_phones = set()
     try:
-        existing_phone_rows = db.execute_query("SELECT normalized_phone FROM authorized_users WHERE normalized_phone IS NOT NULL")
-        for r in (existing_phone_rows or []):
-            existing_phones.add(r["normalized_phone"] if isinstance(r, dict) else r[0])
+        cursor.execute("SELECT student_number, normalized_phone FROM authorized_users")
+        for row in cursor.fetchall():
+            if row["student_number"]:
+                existing_usernames.add(row["student_number"])
+            if row["normalized_phone"]:
+                existing_phones.add(row["normalized_phone"])
     except Exception as e:
-        debug_info.append(f"خطا در خواندن phones: {e}")
+        debug_info.append(f"خطا در خواندن usernames/phones: {e}")
 
     debug_info.append(f"تعداد اساتید در جدول instructors: {len(instructors)}")
     debug_info.append(f"تعداد usernames موجود در authorized_users: {len(existing_usernames)}")
     debug_info.append(f"تعداد phones موجود در authorized_users: {len(existing_phones)}")
 
-    # بررسی schema جدول authorized_users
-    try:
-        cols = db.execute_query("PRAGMA table_info(authorized_users)")
-        col_names = [c["name"] for c in cols] if cols else []
-        debug_info.append(f"ستون‌های authorized_users: {col_names}")
-        if "user_type" not in col_names:
-            debug_info.append("⚠️ ستون user_type وجود ندارد — تلاش برای افزودن")
-            try:
-                db.execute_query("ALTER TABLE authorized_users ADD COLUMN user_type TEXT DEFAULT 'student'")
-                debug_info.append("✓ ستون user_type اضافه شد")
-            except Exception as e:
-                debug_info.append(f"❌ خطا در افزودن user_type: {e}")
-                errors.append(f"خطا در افزودن ستون user_type: {e}")
-    except Exception as e:
-        debug_info.append(f"خطا در بررسی schema: {e}")
-
+    # 5. INSERT هر استاد
     for inst in instructors:
         try:
             inst_dict = dict(inst) if not isinstance(inst, dict) else inst
             username = inst_dict.get("username") or inst_dict.get("code")
             full_name = inst_dict.get("full_name") or ""
             phone = inst_dict.get("phone") or ""
-            code = inst_dict.get("code") or ""
 
             if not username:
                 errors.append(f"استاد با id={inst_dict.get('id', '?')} username ندارد")
                 continue
 
-            # بررسی تکراری نبودن با student_number
+            # بررسی تکراری نبودن
             if username in existing_usernames:
                 skipped_count += 1
                 continue
 
-            # ساخت phone منحصر به فرد برای جلوگیری از UNIQUE constraint
-            # اگر تلفن خالی است یا تکراری، از username استفاده کن
+            # ساخت phone منحصر به فرد
             if not phone or phone == "-" or phone == "":
                 phone = username
-            # اگر این phone قبلاً استفاده شده، username را به آن اضافه کن
             if phone in existing_phones:
                 phone = f"{username}_{phone}"
 
@@ -692,24 +724,24 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
             password = username
             pw_hash = hash_password(password)
 
-            # INSERT مستقیم (با user_type)
+            # INSERT مستقیم
             try:
-                result = db.execute_query(
+                cursor.execute(
                     '''INSERT INTO authorized_users
                        (name, display_phone, normalized_phone, student_number, student_type, role, first_channel, password_hash, user_type)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (full_name or username, phone, phone, username, "ناپیوسته", "instructor", "instructor_sync", pw_hash, "instructor")
                 )
-                if result is not None:
-                    added_count += 1
-                    existing_usernames.add(username)
-                    existing_phones.add(phone)
-                else:
-                    errors.append(f"خطا در افزودن {username} — execute_query نتیجه None برگرداند")
+                added_count += 1
+                existing_usernames.add(username)
+                existing_phones.add(phone)
             except Exception as e:
                 errors.append(f"{username}: {e}")
         except Exception as e:
             errors.append(f"{inst_dict.get('username', '?')}: {e}")
+
+    conn.commit()
+    conn.close()
 
     return {
         "ok": added_count > 0 or skipped_count > 0,
