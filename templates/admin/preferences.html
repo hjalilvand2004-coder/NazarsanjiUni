@@ -774,10 +774,13 @@ async function submitCoursePicker() {
     const instructorUsername = admin.username;
     const instructorCode = admin.username;
 
+    // ساخت لیست دروس انتخابی برای نمایش در پیام تأیید
+    let courseNames = [];
     const items = [];
     for (const id of selectedCourses) {
         const course = allCourses.find(c => (c.id || c.unique_code) == id);
         if (!course) continue;
+        courseNames.push(course.title || course.course_name || '');
         items.push({
             unique_course_code: course.unique_code || course.code || '',
             course_name: course.title || course.course_name || '',
@@ -790,6 +793,21 @@ async function submitCoursePicker() {
             term_code: '',
         });
     }
+
+    // پیغام تأیید قبل از ثبت
+    const totalCredits = getTotalCredits();
+    let confirmMsg = `آیا از ثبت دروس زیر مطمئن هستید؟\n\n`;
+    courseNames.forEach((name, i) => {
+        confirmMsg += `${toFa(i + 1)}. ${name}\n`;
+    });
+    confirmMsg += `\n📊 مجموع: ${toFa(courseNames.length)} درس — ${toFa(totalCredits)} واحد`;
+    if (maxUnits > 0) {
+        confirmMsg += ` (کف: ${toFa(maxUnits)} / سقف: ${toFa(maxUnits + 3)})`;
+    }
+    confirmMsg += `\n\n⚠️ دروس تکراری به‌صورت خودکار نادیده گرفته می‌شوند.`;
+
+    if (!confirm(confirmMsg)) return;
+
     try {
         const r = await fetch('/api/teaching-preferences/bulk', {
             method: 'POST',

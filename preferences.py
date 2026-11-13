@@ -227,6 +227,14 @@ def create_teaching_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int],
     try:
         conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
         cursor = conn.cursor()
+        # بررسی تکراری بودن (همان استاد + همان درس)
+        existing = cursor.execute(
+            "SELECT id FROM teaching_preferences WHERE instructor_code = ? AND unique_course_code = ?",
+            (instructor_code, unique_code)
+        ).fetchone()
+        if existing:
+            conn.close()
+            return None, f"درس تکراری: این درس قبلاً برای این استاد ثبت شده است."
         cursor.execute(query, params)
         conn.commit()
         pref_id = cursor.lastrowid
