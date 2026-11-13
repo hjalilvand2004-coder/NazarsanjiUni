@@ -1,3 +1,28 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}پنل مدیریت{% endblock %} | نظرسنجی دروس {{ SEMESTER_LABEL }}</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('serve_admin_static', path='style.css') }}?v={{ APP_VERSION }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">سامانه نظرسنجی</span>
+                    <span class="brand-sub">{{ SEMESTER_LABEL }}</span>
+                </div>
+            </div>
+
             <div class="sidebar-section">اصلی</div>
             {% if admin.role != 'instructor' %}
             <a href="{{ url_for('admin_index') }}" class="sidebar-link {% if request.endpoint == 'admin_index' %}active{% endif %}">
@@ -111,3 +136,19 @@
                 {% endif %}
             </div>
         </aside>
+
+        <!-- Main -->
+        <main class="admin-main">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for cat, msg in messages %}
+                    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+                {% endfor %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
