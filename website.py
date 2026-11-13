@@ -1443,6 +1443,12 @@ def admin_preferences():
                      or p.get("instructor_code") == instructor_username]
         unique_courses = db.execute_query("SELECT unique_code, title FROM unique_courses ORDER BY title") or []
         terms = slot_times_module.get_terms()["terms"]
+        # گرفتن max_teaching_units استاد
+        max_units = 0
+        if INSTRUCTORS_AVAILABLE:
+            inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (instructor_username, instructor_username))
+            if inst_rows:
+                max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
         return render_template(
             "admin/preferences.html",
             teaching_items=teaching_items,
@@ -1451,6 +1457,7 @@ def admin_preferences():
             terms=terms,
             admin=g.admin,
             is_instructor=True,
+            max_teaching_units=max_units,
         )
     teaching_items = prefs_module.get_all_teaching_preferences(db)
     time_items = prefs_module.get_all_time_preferences(db)
@@ -1474,7 +1481,11 @@ def admin_preferences():
 @admin_or_instructor_required
 def api_courses_unique_list():
     """لیست دروس یکتا — برای استفاده در Course Picker."""
-    rows = db.execute_query("SELECT unique_code AS id, unique_code, title, course_group FROM unique_courses WHERE is_active = 1 ORDER BY title")
+    rows = db.execute_query(
+        """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group,
+           (SELECT credits FROM courses WHERE unique_code = uc.unique_code AND credits IS NOT NULL LIMIT 1) AS credits
+           FROM unique_courses uc WHERE uc.is_active = 1 ORDER BY uc.title"""
+    )
     items = [dict(r) if not isinstance(r, dict) else r for r in rows] if rows else []
     return jsonify({"ok": True, "items": items, "count": len(items)})
 
@@ -1822,7 +1833,9 @@ def api_slot_times_periods():
 def api_courses_by_group():
     """گرفتن دروس یکتا گروه‌بندی‌شده بر اساس course_group."""
     rows = db.execute_query(
-        "SELECT unique_code AS id, unique_code, title, course_group FROM unique_courses WHERE is_active = 1 ORDER BY course_group, title"
+        """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group,
+           (SELECT credits FROM courses WHERE unique_code = uc.unique_code AND credits IS NOT NULL LIMIT 1) AS credits
+           FROM unique_courses uc WHERE uc.is_active = 1 ORDER BY uc.course_group, uc.title"""
     )
     items = [dict(r) if not isinstance(r, dict) else r for r in rows] if rows else []
     # گروه‌بندی
@@ -2687,15 +2700,85 @@ def admin_profile():
         email = request.form.get("email", "")
         new_password = request.form.get("new_password", "")
 
-        db.update_admin_profile(g.admin["id"], full_name=full_name, email=email)
-        if new_password:
-            db.update_admin_password(g.admin["id"], new_password)
-        audit_log("profile_update", "admin", g.admin["id"], "به‌روزرسانی پروفایل")
-        flash("پروفایل به‌روز شد.", "success")
+        # اگر استاد است، در authorized_users به‌روزرسانی کن
+        if g.admin.get("role") == "instructor":
+            try:
+                db.execute_query("UPDATE authorized_users SET name = ? WHERE id = ?", (full_name, g.admin["id"]))
+                if new_password:
+                    from src.database import hash_password
+                    pw_hash = hash_password(new_password)
+                    db.execute_query("UPDATE authorized_users SET password_hash = ? WHERE id = ?", (pw_hash, g.admin["id"]))
+                # به‌روزرسانی session
+                session["admin"]["full_name"] = full_name
+                flash("پروفایل به‌روز شد.", "success")
+            except Exception as e:
+                flash(f"خطا در به‌روزرسانی: {e}", "error")
+        else:
+            # ادمین: از روش قبلی استفاده کن
+            db.update_admin_profile(g.admin["id"], full_name=full_name, email=email)
+            if new_password:
+                db.update_admin_password(g.admin["id"], new_password)
+            audit_log("profile_update", "admin", g.admin["id"], "به‌روزرسانی پروفایل")
+            flash("پروفایل به‌روز شد.", "success")
         return redirect(url_for("admin_profile"))
 
-    admin = db.get_admin_by_id(g.admin["id"])
+    # گرفتن اطلاعات کاربر
+    if g.admin.get("role") == "instructor":
+        # استاد: از authorized_users
+        rows = db.execute_query("SELECT * FROM authorized_users WHERE id = ?", (g.admin["id"],))
+        if rows:
+            admin = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+            admin["full_name"] = admin.get("name", "")
+            admin["email"] = admin.get("email", "")
+            admin["username"] = admin.get("student_number", "")
+        else:
+            admin = {"full_name": "", "email": "", "username": ""}
+    else:
+        # ادمین: از admin_users
+        admin = db.get_admin_by_id(g.admin["id"])
     return render_template("admin/profile.html", admin=admin)
+
+
+@app.route("/instructor/change-password", methods=["GET", "POST"])
+@instructor_login_required
+def instructor_change_password():
+    """تغییر رمز عبور استاد."""
+    if request.method == "POST":
+        old_password = request.form.get("old_password", "")
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not old_password or not new_password:
+            flash("رمز فعلی و رمز جدید را وارد کنید.", "error")
+            return render_template("instructor/change_password.html")
+
+        if len(new_password) < 4:
+            flash("رمز جدید باید حداقل ۴ کاراکتر باشد.", "error")
+            return render_template("instructor/change_password.html")
+
+        if new_password != confirm_password:
+            flash("رمز جدید و تأییدیه آن یکسان نیستند.", "error")
+            return render_template("instructor/change_password.html")
+
+        # بررسی رمز فعلی
+        rows = db.execute_query("SELECT password_hash FROM authorized_users WHERE id = ?", (g.admin["id"],))
+        if not rows:
+            flash("کاربر یافت نشد.", "error")
+            return render_template("instructor/change_password.html")
+
+        user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+        if not verify_password(old_password, user["password_hash"]):
+            flash("رمز فعلی نادرست است.", "error")
+            return render_template("instructor/change_password.html")
+
+        # به‌روزرسانی رمز
+        from src.database import hash_password
+        pw_hash = hash_password(new_password)
+        db.execute_query("UPDATE authorized_users SET password_hash = ? WHERE id = ?", (pw_hash, g.admin["id"]))
+        flash("رمز عبور با موفقیت تغییر کرد.", "success")
+        return redirect(url_for("admin_preferences"))
+
+    return render_template("instructor/change_password.html")
 
 
 # ==================================================
