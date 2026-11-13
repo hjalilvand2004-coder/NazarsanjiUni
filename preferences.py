@@ -177,7 +177,9 @@ def get_all_teaching_preferences(db, term_code=None, instructor_code=None):
 
 
 def create_teaching_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional[str]]:
-    """ساخت مطلوبیت تدریس — نرمال‌سازی کدها قبل از ذخیره."""
+    """ساخت مطلوبیت تدریس — نرمال‌سازی کدها قبل از ذخیره.
+    از کانکشن مستقیم sqlite3 استفاده می‌کند تا last_insert_rowid درست کار کند."""
+    import sqlite3 as _sqlite3
     # نرمال‌سازی
     unique_code = normalize_code(data.get("unique_course_code", ""))
     instructor_code = normalize_instructor_code(data.get("instructor_code", ""))
@@ -202,14 +204,17 @@ def create_teaching_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int],
         data.get("term_code", ""),
         data.get("priority") or 999,
     )
-    result = db.execute_query(query, params)
-    if result is None:
-        return None, "خطا در ذخیره‌سازی"
-    # گرفتن id آخرین رکورد
-    rows = db.execute_query("SELECT last_insert_rowid() AS id")
-    if rows:
-        return (rows[0]["id"] if isinstance(rows[0], dict) else rows[0][0]), None
-    return 0, None
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        pref_id = cursor.lastrowid
+        conn.close()
+        return pref_id, None
+    except Exception as e:
+        logger.error(f"create_teaching_preference error: {e}")
+        return None, str(e)
 
 
 def update_teaching_preference(db, pref_id: int, data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
@@ -271,7 +276,9 @@ def get_all_time_preferences(db, instructor_code=None, day=None):
 
 
 def create_time_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional[str]]:
-    """ساخت مطلوبیت زمان‌بندی."""
+    """ساخت مطلوبیت زمان‌بندی.
+    از کانکشن مستقیم sqlite3 استفاده می‌کند تا last_insert_rowid درست کار کند."""
+    import sqlite3 as _sqlite3
     start_time = data.get("start_time", "")
     end_time = data.get("end_time", "")
     # تعیین گروه زمانی به‌صورت خودکار
@@ -300,13 +307,17 @@ def create_time_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int], Opt
         data.get("time_group", "morning"),
         data.get("priority") or 0,
     )
-    result = db.execute_query(query, params)
-    if result is None:
-        return None, "خطا در ذخیره‌سازی"
-    rows = db.execute_query("SELECT last_insert_rowid() AS id")
-    if rows:
-        return (rows[0]["id"] if isinstance(rows[0], dict) else rows[0][0]), None
-    return 0, None
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        pref_id = cursor.lastrowid
+        conn.close()
+        return pref_id, None
+    except Exception as e:
+        logger.error(f"create_time_preference error: {e}")
+        return None, str(e)
 
 
 def update_time_preference(db, pref_id: int, data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
