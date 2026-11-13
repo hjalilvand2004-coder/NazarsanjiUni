@@ -989,12 +989,36 @@ def sso_callback():
                         ip_address=request.remote_addr,
                         user_agent=request.headers.get("User-Agent", "")[:200])
         session.permanent = True
-        session["student"] = {
-            "id": user["id"], "name": user["name"],
-            "student_number": user["student_number"],
-            "student_type": user["student_type"],
-            "is_admin": user["role"] == "admin",
-        }
+        # اگر استاد است، در session["admin"] ذخیره کن تا به داشبورد استاد برود
+        user_role = user.get("role") or ""
+        user_type = user.get("user_type") or ""
+        if user_role == "instructor" or user_type == "instructor":
+            session["admin"] = {
+                "id": user["id"],
+                "username": user.get("student_number") or user.get("name") or "",
+                "full_name": user.get("name") or "",
+                "role": "instructor",
+            }
+            flash("ورود موفقیت‌آمیز بود! (از طریق SSO — استاد)", "success")
+            instructor_redirect = settings.get("web_redirect") or "/instructor/dashboard"
+            return redirect(instructor_redirect)
+        elif user_role == "admin":
+            session["admin"] = {
+                "id": user["id"],
+                "username": user.get("student_number") or user.get("name") or "",
+                "full_name": user.get("name") or "",
+                "role": "admin",
+            }
+            flash("ورود موفقیت‌آمیز بود! (از طریق SSO — ادمین)", "success")
+            return redirect(url_for("admin_index"))
+        else:
+            session["student"] = {
+                "id": user["id"], "name": user["name"],
+                "student_number": user["student_number"],
+                "student_type": user["student_type"],
+                "is_admin": False,
+            }
+            flash("ورود موفقیت‌آمیز بود! (از طریق SSO)", "success")
     except Exception as e:
         print(f"SSO session error: {e}")
         return _sso_fail("session_error:" + str(e))

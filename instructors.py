@@ -624,52 +624,68 @@ def sync_instructors_to_users(db, default_password: str = "Instructor@1405") -> 
     skipped_count = 0
     errors = []
 
+    # گرفتن لیست username های موجود برای جلوگیری از تکرار
+    existing_usernames = set()
+    try:
+        existing_rows = db.execute_query("SELECT student_number FROM authorized_users WHERE student_number IS NOT NULL")
+        for r in (existing_rows or []):
+            existing_usernames.add(r["student_number"] if isinstance(r, dict) else r[0])
+    except Exception:
+        pass
+
+    # گرفتن لیست phone های موجود برای جلوگیری از duplicate UNIQUE
+    existing_phones = set()
+    try:
+        existing_phone_rows = db.execute_query("SELECT normalized_phone FROM authorized_users WHERE normalized_phone IS NOT NULL")
+        for r in (existing_phone_rows or []):
+            existing_phones.add(r["normalized_phone"] if isinstance(r, dict) else r[0])
+    except Exception:
+        pass
+
     for inst in instructors:
         try:
             inst_dict = dict(inst) if not isinstance(inst, dict) else inst
             username = inst_dict.get("username") or inst_dict.get("code")
             full_name = inst_dict.get("full_name") or ""
-            phone = inst_dict.get("phone") or username  # اگر تلفن نبود، از username استفاده کن
+            phone = inst_dict.get("phone") or ""
             code = inst_dict.get("code") or ""
 
             if not username:
                 continue
 
+            # بررسی تکراری نبودن با student_number
+            if username in existing_usernames:
+                skipped_count += 1
+                continue
+
+            # ساخت phone منحصر به فرد برای جلوگیری از UNIQUE constraint
+            # اگر تلفن خالی است یا تکراری، از username استفاده کن
+            if not phone or phone == "-" or phone == "":
+                phone = username
+            # اگر این phone قبلاً استفاده شده، username را به آن اضافه کن
+            if phone in existing_phones:
+                phone = f"{username}_{phone}"
+
             # رمز عبور = نام کاربری
             password = username
             pw_hash = hash_password(password)
 
-            # بررسی تکراری نبودن (با student_number یا phone)
-            existing = db.execute_query(
-                "SELECT id FROM authorized_users WHERE student_number = ? OR normalized_phone = ?",
-                (username, phone)
-            )
-            if existing:
-                skipped_count += 1
-                continue
-
-            # افزودن به authorized_users با نقش instructor و user_type=استاد
-            ok = db.add_authorized_user(
-                name=full_name,
-                phone=phone,
-                student_number=username,
-                student_type="ناپیوسته",  # پیش‌فرض
-                role="instructor",
-                first_channel="instructor_sync",
-                password_hash=pw_hash,
-            )
-            if ok:
-                # آپدیت user_type به instructor
-                try:
-                    db.execute_query(
-                        "UPDATE authorized_users SET user_type = 'instructor' WHERE student_number = ?",
-                        (username,)
-                    )
-                except Exception:
-                    pass
-                added_count += 1
-            else:
-                errors.append(f"خطا در افزودن {username}")
+            # INSERT مستقیم (با user_type)
+            try:
+                result = db.execute_query(
+                    '''INSERT INTO authorized_users
+                       (name, display_phone, normalized_phone, student_number, student_type, role, first_channel, password_hash, user_type)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (full_name or username, phone, phone, username, "ناپیوسته", "instructor", "instructor_sync", pw_hash, "instructor")
+                )
+                if result is not None:
+                    added_count += 1
+                    existing_usernames.add(username)
+                    existing_phones.add(phone)
+                else:
+                    errors.append(f"خطا در افزودن {username}")
+            except Exception as e:
+                errors.append(f"{username}: {e}")
         except Exception as e:
             errors.append(f"{inst_dict.get('username', '?')}: {e}")
 
