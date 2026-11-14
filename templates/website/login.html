@@ -62,5 +62,28 @@
         </div>
     </div>
 <div style="text-align:center;padding:12px;font-size:12px;color:var(--text-3);border-top:1px solid var(--glass-border);margin-top:20px;">طراحی و توسعه توسط <a href="https://MahAI.ir" target="_blank" style="color:var(--accent);font-weight:600;">شرکت ماه افزار هوشمند رسا</a></div>
+<script>
+// تبدیل آنی ارقام فارسی/عربی به لاتین در فیلد شماره دانشجویی (رمز عبور در سمت سرور تطبیق داده می‌شود)
+// (ورود مستقل از وضعیت کیبورد انگلیسی/فارسی)
+(function(){
+  var D={'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9',
+         '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
+  function toLatin(s){return String(s).replace(/[۰-۹٠-٩]/g,function(c){return D[c]||c;});}
+  function norm(el){
+    var v=el.value, n=toLatin(v);
+    if(n!==v){
+      var s=el.selectionStart, e=el.selectionEnd;
+      el.value=n;
+      try{el.setSelectionRange(s,e);}catch(x){}
+    }
+  }
+  function bind(){
+    document.querySelectorAll('input[name="username"],input[name="student_number"]').forEach(function(el){
+      el.addEventListener('input',function(){norm(el);});
+    });
+  }
+  if(document.readyState!=='loading')bind();else document.addEventListener('DOMContentLoaded',bind);
+})();
+</script>
 </body>
 </html>

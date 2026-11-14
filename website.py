@@ -380,15 +380,18 @@ def instructor_login():
             flash("نام کاربری و رمز عبور را وارد کنید.", "error")
             return render_template("instructor/login.html")
 
+        # نرمال‌سازی ارقام فارسی/عربی -> لاتین (مستقل از وضعیت کیبورد کاربر)
+        username_norm = helpers.normalize_digits(username)
+
         # جستجو در authorized_users (اساتید از طریق sync_to_users اینجا اضافه می‌شوند)
         # اول با student_number (که همان username است)
-        user = db.get_user_by_student_number(username)
+        user = db.get_user_by_student_number(username_norm)
         # اگر پیدا نشد، با phone جستجو کن
         if not user:
             try:
                 rows = db.execute_query(
                     "SELECT * FROM authorized_users WHERE display_phone = ? OR normalized_phone = ?",
-                    (username, username)
+                    (username_norm, username_norm)
                 )
                 if rows:
                     user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
@@ -411,8 +414,9 @@ def instructor_login():
             flash("این حساب برای ورود استاد نیست.", "error")
             return render_template("instructor/login.html")
 
-        # بررسی رمز عبور
-        if not db.verify_user_password(user, password):
+        # بررسی رمز عبور — تطبیق هم با ورودی خام و هم نرمال‌شده (پشتیبانی از کیبورد فارسی/انگلیسی)
+        if not (db.verify_user_password(user, password) or
+                db.verify_user_password(user, helpers.normalize_digits(password))):
             flash("نام کاربری یا رمز عبور نادرست است.", "error")
             return render_template("instructor/login.html")
 
@@ -696,7 +700,9 @@ def student_login():
             flash("حساب شما مسدود شده است.", "error")
             return render_template("website/login.html")
 
-        if not db.verify_user_password(user, password):
+        # بررسی رمز عبور — تطبیق هم با ورودی خام و هم نرمال‌شده (پشتیبانی از کیبورد فارسی/انگلیسی)
+        if not (db.verify_user_password(user, password) or
+                db.verify_user_password(user, helpers.normalize_digits(password))):
             flash("شماره دانشجویی یا رمز عبور نادرست است.", "error")
             return render_template("website/login.html")
 
@@ -1961,8 +1967,12 @@ def admin_login():
             flash("نام کاربری و رمز عبور را وارد کنید.", "error")
             return render_template("admin/login.html")
 
-        admin = db.get_admin_by_username(username)
-        if not admin or not verify_password(password, admin["password_hash"]):
+        # نرمال‌سازی ارقام فارسی/عربی -> لاتین (مستقل از وضعیت کیبورد کاربر)
+        username_norm = helpers.normalize_digits(username)
+        admin = db.get_admin_by_username(username_norm)
+        # بررسی رمز عبور — تطبیق هم با ورودی خام و هم نرمال‌شده
+        if not admin or not (verify_password(password, admin["password_hash"]) or
+                             verify_password(helpers.normalize_digits(password), admin["password_hash"])):
             flash("نام کاربری یا رمز عبور نادرست است.", "error")
             return render_template("admin/login.html")
 
