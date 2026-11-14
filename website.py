@@ -1311,7 +1311,8 @@ def api_teaching_preferences_delete(pref_id):
 @app.route("/api/teaching-preferences/bulk", methods=["POST"])
 @admin_or_instructor_required
 def api_teaching_preferences_bulk():
-    """ساخت چندین مطلوبیت تدریس به‌صورت یکجا (برای Course Picker)."""
+    """ساخت چندین مطلوبیت تدریس به‌صورت یکجا (برای Course Picker).
+    دروس تکراری به‌صورت خودکار نادیده گرفته می‌شوند (بدون خطا)."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
     data = request.get_json(silent=True) or {}
@@ -1320,15 +1321,25 @@ def api_teaching_preferences_bulk():
         return jsonify({"ok": False, "error": "لطفاً حداقل یک درس انتخاب کنید."}), 400
     created_ids = []
     errors = []
+    skipped_duplicates = 0
     for item in items:
         pref_id, err = prefs_module.create_teaching_preference(db, item)
         if err:
-            errors.append(f"{item.get('course_name', '?')}: {err}")
+            if "تکراری" in err:
+                skipped_duplicates += 1  # تکراری‌ها نادیده گرفته می‌شوند
+            else:
+                errors.append(f"{item.get('course_name', '?')}: {err}")
         else:
             created_ids.append(pref_id)
     if created_ids:
         audit_log("teaching_pref_bulk", description=f"ساخت {len(created_ids)} مطلوبیت تدریس")
-    return jsonify({"ok": len(created_ids) > 0, "count": len(created_ids), "ids": created_ids, "errors": errors[:5]})
+    return jsonify({
+        "ok": True,
+        "count": len(created_ids),
+        "ids": created_ids,
+        "errors": errors[:5],
+        "skipped_duplicates": skipped_duplicates,
+    })
 
 
 @app.route("/api/teaching-preferences/upload", methods=["POST"])

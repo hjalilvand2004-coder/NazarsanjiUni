@@ -550,9 +550,16 @@ let courseGroups = {};
 let selectedCourses = new Set();
 let currentDay = null;
 let selectedSlots = [];
+let existingPrefMap = {};  // course_code -> pref_id (برای تشخیص دروس جدید/حذفی همان استاد)
 
 const faDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
 function toFa(n) { return String(n).replace(/[0-9]/g, d => faDigits[d]); }
+
+// دروس کارورزی و پروژه در محاسبه سقف/کف واحد لحاظ نمی‌شوند
+function isExcludedFromCredits(course) {
+    const title = (course.title || course.course_name || '');
+    return title.indexOf('کارورزی') >= 0 || title.indexOf('پروژه') >= 0;
+}
 
 // Toast برای هشدارهای موقت
 function showToast(msg) {
@@ -596,6 +603,7 @@ function filterTime() {
 async function openCoursePicker() {
     document.getElementById('course-picker-modal').style.display = 'flex';
     selectedCourses.clear();
+    existingPrefMap = {};  // ریست نقشه دروس قبلی همین استاد
     if (Object.keys(courseGroups).length === 0) {
         try {
             const r = await fetch('/api/courses/by-group');
@@ -607,15 +615,18 @@ async function openCoursePicker() {
             allCourses = [];
         }
     }
-    // بارگذاری مطلوبیت‌های تدریس قبلی
+    // بارگذاری مطلوبیت‌های تدریس قبلی — فقط برای همین استاد
+    const adminObj = {{ admin | tojson }};
+    const instructorCode = adminObj.username;
     try {
-        const r = await fetch('/api/teaching-preferences');
+        const r = await fetch('/api/teaching-preferences?instructor_code=' + encodeURIComponent(instructorCode));
         const data = await r.json();
         if (data.ok && data.items) {
-            // علامت‌گذاری دروس قبلی
+            // علامت‌گذاری فقط دروس ثبت‌شده همین استاد
             data.items.forEach(p => {
                 const courseCode = p.unique_course_code;
                 if (courseCode) {
+                    existingPrefMap[courseCode] = p.id;  // نگه‌داری برای حذف در صورت لزوم
                     const course = allCourses.find(c => c.unique_code == courseCode);
                     if (course) {
                         const id = course.id || course.unique_code;
@@ -706,10 +717,10 @@ function toggleCourse(id) {
             const ceiling = maxUnits + 3; // سقف = کف + ۳ واحد
             let currentCredits = getTotalCredits();
             const course = allCourses.find(c => (c.id || c.unique_code) == id);
-            if (course) {
+            if (course && !isExcludedFromCredits(course)) {  // کارورزی/پروژه در سقف لحاظ نمی‌شوند
                 const credits = parseInt(course.credits) || 0;
                 if (currentCredits + credits > ceiling) {
-                    showToast(`⚠️ امکان انتخاب این درس وجود ندارد.\nمجموع واحدها ${currentCredits + credits} می‌شود که بیشتر از سقف مجاز (${ceiling} واحد) است.\nکف: ${maxUnits} | سقف: ${ceiling} واحد`);
+                    showToast(`⚠️ امکان انتخاب این درس وجود ندارد.\nمجموع واحدها ${currentCredits + credits} می‌شود که بیشتر از سقف مجاز (${ceiling} واحد) است.\nکف: ${maxUnits} | سقف: ${ceiling} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)`);
                     return;
                 }
             }
@@ -732,6 +743,7 @@ function getTotalCredits() {
     for (const id of selectedCourses) {
         const course = allCourses.find(c => (c.id || c.unique_code) == id);
         if (course) {
+            if (isExcludedFromCredits(course)) continue;  // کارورزی/پروژه در محاسبه مستثنی
             total += parseInt(course.credits) || 0;
         }
     }
@@ -748,84 +760,131 @@ function updateCourseCount() {
     if (maxUnits > 0) {
         html += ` • <span style="color:${credits > ceiling ? '#ef4444' : '#10b981'};font-weight:700;">${toFa(credits)} واحد</span>`;
         html += ` (کف: ${toFa(maxUnits)} / سقف: ${toFa(ceiling)})`;
+        html += ` <span style="font-size:10px;color:var(--text-3);">— کارورزی/پروژه مستثنی</span>`;
     }
     document.getElementById('course-count-display').innerHTML = html;
 }
 
 async function submitCoursePicker() {
-    if (selectedCourses.size === 0) {
+    const adminObj = {{ admin | tojson }};
+    const instructorName = adminObj.full_name || adminObj.username;
+    const instructorUsername = adminObj.username;
+    const instructorCode = adminObj.username;
+    const maxUnits = {{ max_teaching_units|default(0) }};
+    const ceiling = maxUnits + 3;
+
+    // اگر هیچ درسی انتخاب نشده ولی دروس قبلی هم وجود ندارد
+    if (selectedCourses.size === 0 && Object.keys(existingPrefMap).length === 0) {
         alert('لطفاً حداقل یک درس انتخاب کنید');
         return;
     }
 
-    // اعتبارسنجی تعداد واحد
-    const maxUnits = {{ max_teaching_units|default(0) }};
-    if (maxUnits > 0) {
-        const ceiling = maxUnits + 3; // سقف = کف + ۳ واحد
-        let totalCredits = getTotalCredits();
-        if (totalCredits > ceiling) {
-            alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) بیشتر از سقف مجاز (${toFa(ceiling)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\nلطفاً دروس کمتری انتخاب کنید.`);
-            return;
-        }
-    }
+    // محاسبه تغییرات (sync): ملاک، تیک‌های نهایی فرم مودال است
+    const existingCodes = new Set(Object.keys(existingPrefMap));
+    const currentCodes = new Set();
+    const itemsToAdd = [];
+    const idsToDelete = [];
+    const addedNames = [];
+    const deletedNames = [];
+    const unchangedNames = [];
 
-    const admin = {{ admin | tojson }};
-    const instructorName = admin.full_name || admin.username;
-    const instructorUsername = admin.username;
-    const instructorCode = admin.username;
-
-    // ساخت لیست دروس انتخابی برای نمایش در پیام تأیید
-    let courseNames = [];
-    const items = [];
     for (const id of selectedCourses) {
         const course = allCourses.find(c => (c.id || c.unique_code) == id);
         if (!course) continue;
-        courseNames.push(course.title || course.course_name || '');
-        items.push({
-            unique_course_code: course.unique_code || course.code || '',
-            course_name: course.title || course.course_name || '',
-            instructor_code: instructorCode,
-            instructor_name: instructorName,
-            instructor_username: instructorUsername,
-            expert_group: course.course_group || course.group || '',
-            cooperation_type: '',
-            status: 'pending',
-            term_code: '',
-        });
+        const code = course.unique_code || course.code || '';
+        if (!code) continue;
+        currentCodes.add(code);
+        const name = course.title || course.course_name || '';
+        if (!existingCodes.has(code)) {
+            // درس جدید — ثبت شود
+            itemsToAdd.push({
+                unique_course_code: code,
+                course_name: name,
+                instructor_code: instructorCode,
+                instructor_name: instructorName,
+                instructor_username: instructorUsername,
+                expert_group: course.course_group || course.group || '',
+                cooperation_type: '',
+                status: 'pending',
+                term_code: '',
+            });
+            addedNames.push(name);
+        } else {
+            unchangedNames.push(name);  // قبلاً ثبت شده — بدون تغییر
+        }
+    }
+    // دروس قبلی که الان تیک ندارند → حذف از جدول
+    for (const code of existingCodes) {
+        if (!currentCodes.has(code)) {
+            idsToDelete.push(existingPrefMap[code]);
+            const course = allCourses.find(c => c.unique_code == code);
+            deletedNames.push(course ? (course.title || course.course_name || '') : code);
+        }
     }
 
-    // پیغام تأیید قبل از ثبت
+    // اگر هیچ تغییری نیست
+    if (itemsToAdd.length === 0 && idsToDelete.length === 0) {
+        alert('هیچ تغییری برای ذخیره وجود ندارد.');
+        return;
+    }
+
+    // اعتبارسنجی تعداد واحد (کارورزی/پروژه مستثنی)
     const totalCredits = getTotalCredits();
-    let confirmMsg = `آیا از ثبت دروس زیر مطمئن هستید؟\n\n`;
-    courseNames.forEach((name, i) => {
-        confirmMsg += `${toFa(i + 1)}. ${name}\n`;
-    });
-    confirmMsg += `\n📊 مجموع: ${toFa(courseNames.length)} درس — ${toFa(totalCredits)} واحد`;
+    if (maxUnits > 0 && totalCredits > ceiling) {
+        alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) بیشتر از سقف مجاز (${toFa(ceiling)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)\nلطفاً دروس کمتری انتخاب کنید.`);
+        return;
+    }
+
+    // پیغام تأیید با جزئیات تغییرات
+    let confirmMsg = `آیا از ذخیره دروس مطلوب مطمئن هستید؟\n\n`;
+    if (addedNames.length > 0) {
+        confirmMsg += `➕ دروس جدید (${toFa(addedNames.length)}):\n`;
+        addedNames.forEach((n, i) => { confirmMsg += `   ${toFa(i + 1)}. ${n}\n`; });
+    }
+    if (deletedNames.length > 0) {
+        confirmMsg += `🗑️ دروس حذف‌شده (${toFa(deletedNames.length)}):\n`;
+        deletedNames.forEach((n, i) => { confirmMsg += `   ${toFa(i + 1)}. ${n}\n`; });
+    }
+    if (unchangedNames.length > 0) {
+        confirmMsg += `✅ بدون تغییر (${toFa(unchangedNames.length)}): ${unchangedNames.join('، ')}\n`;
+    }
     if (maxUnits > 0) {
-        confirmMsg += ` (کف: ${toFa(maxUnits)} / سقف: ${toFa(maxUnits + 3)})`;
+        confirmMsg += `\n📊 مجموع واحدها: ${toFa(totalCredits)} (کف: ${toFa(maxUnits)} / سقف: ${toFa(ceiling)}) — کارورزی/پروژه مستثنی`;
     }
     confirmMsg += `\n\n⚠️ دروس تکراری به‌صورت خودکار نادیده گرفته می‌شوند.`;
 
     if (!confirm(confirmMsg)) return;
 
+    // اجرا: ابتدا حذف دروس برداشته‌شده، سپس ثبت دروس جدید
     try {
-        const r = await fetch('/api/teaching-preferences/bulk', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({items}),
-        });
-        const res = await r.json();
-        if (res.ok) {
-            alert(toFa(res.count) + ' مطلوبیت تدریس ثبت شد');
-            closeCoursePicker();
-            location.reload();
-        } else {
-            let msg = 'خطا: ' + (res.error || 'نامشخص');
-            if (res.errors && res.errors.length > 0) {
-                msg += '\n\nخطاها:\n' + res.errors.join('\n');
-            }
-            alert(msg);
+        let deletedCount = 0;
+        for (const pid of idsToDelete) {
+            try {
+                const dr = await fetch('/api/teaching-preferences/' + pid, {method: 'DELETE'});
+                if (dr.ok) deletedCount++;
+            } catch (e) {}
         }
+        let addedCount = 0;
+        if (itemsToAdd.length > 0) {
+            const r = await fetch('/api/teaching-preferences/bulk', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({items: itemsToAdd}),
+            });
+            const res = await r.json();
+            addedCount = res.count || 0;
+            if (res.errors && res.errors.length > 0) {
+                // فقط خطاهای واقعی (نه تکراری) را نشان بده
+                alert('⚠️ برخی دروس با خطا مواجه شدند:\n' + res.errors.join('\n'));
+            }
+        }
+        let msg = '✅ ذخیره شد.\n';
+        msg += `➕ ${toFa(addedCount)} درس جدید ثبت شد\n`;
+        msg += `🗑️ ${toFa(deletedCount)} درس حذف شد\n`;
+        msg += `✅ ${toFa(unchangedNames.length)} درس بدون تغییر`;
+        alert(msg);
+        closeCoursePicker();
+        location.reload();
     } catch (e) {
         alert('خطا: ' + e.message);
     }
