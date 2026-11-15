@@ -76,6 +76,7 @@ DEFAULT_SETTINGS = {
     "button_label": "ورود با حساب سازمانی (دانشجویار۳۶۰)",
     "web_redirect": "",             # مسیر وب پس از ورود (مثلاً /student)
     "mobile_redirect": "",          # مسیر موبایل اپ پس از ورود
+    "service_token": "",            # توکن اشتراک برای endpoint واکشی لیست کاربران (req7)
 }
 
 
@@ -512,10 +513,13 @@ def extract_roles(claims: Dict[str, Any], client_id: str) -> list:
 
 
 def determine_role(roles: list, default_role: str) -> str:
-    """تعیین نقش نهایی: اگر نقشی با .admin بود → admin؛ وگرنه default_role."""
+    """تعیین نقش نهایی: .admin → admin؛ .instructor/instructor → instructor؛ وگرنه default_role."""
     for r in roles:
         if isinstance(r, str) and r.endswith(".admin"):
             return "admin"
+    for r in roles:
+        if isinstance(r, str) and (r.endswith(".instructor") or r == "instructor"):
+            return "instructor"
     return default_role
 
 

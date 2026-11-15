@@ -79,6 +79,32 @@
     </div>
 </div>
 
+<!-- پاک‌سازی یکپارچه مطلوبیت‌ها -->
+<div class="card" style="margin-top:20px;border:1px solid rgba(239,68,68,0.3);">
+    <div class="card-header" style="background:rgba(239,68,68,0.08);">
+        <div class="card-title" style="color:#ef4444;">🗑️ پاک‌سازی یکپارچه مطلوبیت‌های اساتید</div>
+    </div>
+    <div style="padding:18px;">
+        <div style="font-size:13px;color:var(--text-2);line-height:1.8;margin-bottom:14px;">
+            این عملیات <strong>همه مطلوبیت‌های تدریس و زمان‌بندی ثبت‌شده توسط همه اساتید</strong> را حذف می‌کند
+            (دروس، اساتید و دوره‌ها باقی می‌مانند).<br>
+            تعداد فعلی: <strong>{{ pref_counts.teaching }}</strong> مطلوبیت تدریس و <strong>{{ pref_counts.time }}</strong> مطلوبیت زمان‌بندی.<br>
+            <span style="color:var(--text-3);font-size:12px;">⚠️ پیش از پاک‌سازی، پشتیبان دیتابیس به‌صورت خودکار ذخیره می‌شود. ابتدا باید دوره فعال را ببندید.</span>
+        </div>
+        <form method="POST" action="{{ url_for('admin_preference_periods_reset_responses') }}"
+              onsubmit="return confirm('تمام مطلوبیت‌های ثبت‌شده همه اساتید پاک می‌شوند. دروس و اساتید باقی می‌مانند. ادامه می‌دهید؟')">
+            <input type="hidden" name="reset_token" value="{{ pref_reset_token }}">
+            <input type="hidden" name="confirm" value="1">
+            <button type="submit" class="btn btn-danger"
+                    {% if active_period %}disabled
+                    title="ابتدا دوره فعال را ببندید"{% else %}
+                    title="پاک‌کردن همه مطلوبیت‌ها — پیش از آن، پشتیبان دیتابیس ذخیره می‌شود"{% endif %}>
+                🗑️ پاک‌کردن همه مطلوبیت‌ها
+            </button>
+        </form>
+    </div>
+</div>
+
 <!-- مودال افزودن دوره -->
 <div id="add-period-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
     <div style="background:var(--bg-1,#1a1f2e);border:1px solid var(--glass-border);border-radius:24px;padding:0;max-width:600px;width:100%;max-height:92vh;overflow-y:auto;">

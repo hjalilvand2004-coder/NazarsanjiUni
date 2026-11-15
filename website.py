@@ -1106,6 +1106,18 @@ def sso_callback():
         if not rows:
             return _sso_fail("no_user")
         user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+        # [v3.15.0] اگر SSO نقش استاد را اعلام کرده ولی حساب محلی استاد نیست → ارتقا
+        if final_role == "instructor" and user.get("role") != "instructor":
+            try:
+                import sqlite3 as _sqlite3
+                conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+                conn.execute("UPDATE authorized_users SET role = 'instructor', user_type = 'instructor' WHERE id = ?", (user_id,))
+                conn.commit()
+                conn.close()
+                user["role"] = "instructor"
+                user["user_type"] = "instructor"
+            except Exception as e:
+                print(f"SSO instructor promote error: {e}")
         db.record_login(user["id"], "sso",
                         ip_address=request.remote_addr,
                         user_agent=request.headers.get("User-Agent", "")[:200])
@@ -1194,11 +1206,12 @@ def admin_sso_save():
         "issuer": (request.form.get("issuer") or "").strip().rstrip("/"),
         "client_id": (request.form.get("client_id") or "").strip(),
         "scope": (request.form.get("scope") or "openid profile email").strip(),
-        "default_role": request.form.get("default_role") or "user",
+        "default_role": request.form.get("default_role") if request.form.get("default_role") in ("user", "instructor", "admin") else "user",
         "auto_create_account": bool(request.form.get("auto_create_account")),
         "button_label": (request.form.get("button_label") or "ورود با حساب سازمانی").strip(),
         "web_redirect": (request.form.get("web_redirect") or "/student").strip(),
         "mobile_redirect": (request.form.get("mobile_redirect") or "/app/dashboard").strip(),
+        "service_token": (request.form.get("service_token") or "").strip(),
     }
     ok = sso_module.save_settings(new_settings)
     audit_log("sso_settings_update", description="به‌روزرسانی تنظیمات SSO")
@@ -1218,6 +1231,44 @@ def admin_sso_test():
                         "message": "ماژول SSO در دسترس نیست."})
     result = sso_module.test_connection()
     return jsonify(result)
+
+
+# ==================================================
+# [v3.15.0] endpoint واکشی لیست کاربران برای سرور SSO
+# ==================================================
+
+@app.route("/api/service/users")
+def api_service_users():
+    """واکشی لیست کاربران سامانه نظرسنجی (با نقش‌ها) برای سرور SSO.
+    احراز هویت با توکن: پارامتر query ?token= یا هدر X-Service-Token.
+    نیازی به نشست ادمین ندارد — فقط توکن سرویس."""
+    import secrets as _secrets
+    settings = sso_module.load_settings() if SSO_AVAILABLE else {}
+    expected = (settings.get("service_token") or "").strip()
+    if not expected:
+        return jsonify({"ok": False, "error": "service_token_not_configured",
+                        "message": "توکن سرویس در صفحه تنظیمات SSO پیکربندی نشده است."}), 503
+    provided = (request.args.get("token") or request.headers.get("X-Service-Token") or "").strip()
+    if not provided or not _secrets.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+        return jsonify({"ok": False, "error": "unauthorized",
+                        "message": "توکن سرویس نامعتبر است."}), 401
+    try:
+        rows = db.execute_query("SELECT * FROM authorized_users ORDER BY id")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    users = []
+    for r in (rows or []):
+        d = r if isinstance(r, dict) else {}
+        users.append({
+            "username": d.get("student_number") or "",
+            "full_name": d.get("name") or "",
+            "phone": d.get("display_phone") or "",
+            "role": d.get("role") or "user",
+            "user_type": d.get("user_type") or "student",
+            "student_type": d.get("student_type") or "",
+            "is_blocked": bool(d.get("is_blocked")),
+        })
+    return jsonify({"ok": True, "count": len(users), "users": users})
 
 
 # ==================================================
@@ -1273,6 +1324,8 @@ def api_teaching_preferences_create():
     """ساخت مطلوبیت تدریس جدید."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ثبت مطلوبیت وجود ندارد."}), 403
     data = request.get_json(silent=True) or {}
     if not data.get("course_name") or not data.get("instructor_name"):
         return jsonify({"ok": False, "error": "نام درس و نام استاد الزامی است"}), 400
@@ -1289,6 +1342,8 @@ def api_teaching_preferences_update(pref_id):
     """ویرایش مطلوبیت تدریس."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ویرایش مطلوبیت وجود ندارد."}), 403
     data = request.get_json(silent=True) or {}
     ok, err = prefs_module.update_teaching_preference(db, pref_id, data)
     if err:
@@ -1302,9 +1357,26 @@ def api_teaching_preferences_update(pref_id):
 @app.route("/api/teaching-preferences/<int:pref_id>", methods=["DELETE"])
 @admin_or_instructor_required
 def api_teaching_preferences_delete(pref_id):
-    """حذف مطلوبیت تدریس."""
+    """حذف مطلوبیت تدریس — با کنترل بازه فعال بودن دوره و کف واحد."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    # کنترل بازه فعال بودن دوره (فقط برای اساتید)
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ثبت/ویرایش مطلوبیت وجود ندارد."}), 403
+    pref = prefs_module.get_teaching_preference_by_id(db, pref_id)
+    if not pref:
+        return jsonify({"ok": False, "error": "رکورد پیدا نشد"}), 404
+    # کنترل کف واحد: حذف نباید مجموع واحدهای استاد را کمتر از کف (max_teaching_units) کند
+    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE:
+        inst_code = pref.get("instructor_code") or pref.get("instructor_username") or ""
+        max_units = 0
+        inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (inst_code, inst_code))
+        if inst_rows:
+            max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
+        if max_units > 0:
+            total_after = prefs_module.get_instructor_total_credits(db, inst_code, exclude_pref_id=pref_id)
+            if total_after < max_units:
+                return jsonify({"ok": False, "error": f"حذف این درس ممکن نیست: مجموع واحدهای شما پس از حذف ({total_after} واحد) کمتر از کف مجاز ({max_units} واحد) می‌شود. برای حذف، ابتدا از طریق فرم «📚 انتخاب درس‌های مطلوب» یک درس جایگزین ثبت کنید."}), 400
     ok, err = prefs_module.delete_teaching_preference(db, pref_id)
     if err:
         if "پیدا نشد" in err:
@@ -1325,6 +1397,37 @@ def api_teaching_preferences_bulk():
     items = data.get("items", [])
     if not items:
         return jsonify({"ok": False, "error": "لطفاً حداقل یک درس انتخاب کنید."}), 400
+    # کنترل بازه فعال بودن دوره (فقط برای اساتید)
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ثبت مطلوبیت وجود ندارد."}), 403
+    # کنترل کف/سقف واحد برای اساتید (پیش‌بررسی قبل از ثبت)
+    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE:
+        inst_code_raw = items[0].get("instructor_code") or items[0].get("instructor_username") or g.admin.get("username", "")
+        inst_code = prefs_module.normalize_instructor_code(inst_code_raw)
+        max_units = 0
+        inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (inst_code_raw, inst_code_raw))
+        if inst_rows:
+            max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
+        if max_units > 0:
+            credits_map = prefs_module.get_credits_map(db)
+            current_total = prefs_module.get_instructor_total_credits(db, inst_code, credits_map=credits_map)
+            existing = prefs_module.get_all_teaching_preferences(db, instructor_code=inst_code)
+            existing_codes = set(prefs_module.normalize_code(p.get("unique_course_code") or "") for p in existing)
+            added = 0
+            for item in items:
+                name = item.get("course_name") or ""
+                if "کارورزی" in name or "پروژه" in name:
+                    continue
+                code = prefs_module.normalize_code(item.get("unique_course_code") or "")
+                if code in existing_codes:
+                    continue  # تکراری → واحد اضافه نمی‌کند
+                added += credits_map.get(code, 0)
+            final_total = current_total + added
+            ceiling = max_units + 3
+            if final_total > ceiling:
+                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) بیشتر از سقف مجاز ({ceiling} واحد) است. کف: {max_units} / سقف: {ceiling} واحد (کارورزی/پروژه مستثنی)."}), 400
+            if final_total < max_units:
+                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) کمتر از کف مجاز ({max_units} واحد) است. حداقل {max_units} واحد باید انتخاب کنید (کارورزی/پروژه مستثنی)."}), 400
     created_ids = []
     errors = []
     skipped_duplicates = 0
@@ -1389,6 +1492,8 @@ def api_time_preferences_create():
     """ساخت مطلوبیت زمان‌بندی جدید."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ثبت مطلوبیت وجود ندارد."}), 403
     data = request.get_json(silent=True) or {}
     if not data.get("day") or not data.get("instructor_name"):
         return jsonify({"ok": False, "error": "روز و نام استاد الزامی است"}), 400
@@ -1405,6 +1510,8 @@ def api_time_preferences_bulk_create():
     """ساخت چندین مطلوبیت زمان‌بندی به‌صورت یکجا (برای TimeSlotSelector)."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ثبت مطلوبیت وجود ندارد."}), 403
     data = request.get_json(silent=True) or {}
     items = data.get("items", [])
     if not items:
@@ -1428,6 +1535,8 @@ def api_time_preferences_update(pref_id):
     """ویرایش مطلوبیت زمان‌بندی."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ویرایش مطلوبیت وجود ندارد."}), 403
     data = request.get_json(silent=True) or {}
     ok, err = prefs_module.update_time_preference(db, pref_id, data)
     if err:
@@ -1444,6 +1553,8 @@ def api_time_preferences_delete(pref_id):
     """حذف مطلوبیت زمان‌بندی."""
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    if _pref_submission_closed_for_instructor():
+        return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ثبت/ویرایش مطلوبیت وجود ندارد."}), 403
     ok, err = prefs_module.delete_time_preference(db, pref_id)
     if err:
         if "پیدا نشد" in err:
@@ -1476,20 +1587,31 @@ def api_time_preferences_upload():
 
 
 # --- صفحه‌های ادمین برای مطلوبیت‌ها ---
+def _pref_submission_closed_for_instructor():
+    """اگر کاربر استاد است و دوره فعالی برای ثبت مطلوبیت وجود ندارد → True (مسدود).
+    ادمین همیشه مجاز است."""
+    if g.admin.get("role") != "instructor":
+        return False
+    if not PREFERENCES_AVAILABLE:
+        return True
+    return prefs_module.get_active_preference_period(db) is None
+
+
 @app.route("/admin/preferences")
 @admin_or_instructor_required
 def admin_preferences():
     """صفحه مدیریت مطلوبیت‌های اساتید — ادمین همه را می‌بیند، استاد فقط خودش را."""
     if not PREFERENCES_AVAILABLE:
         return render_template("admin/preferences_unavailable.html", admin=g.admin)
-    # اگر استاد است، فقط مطلوبیت‌های خودش را ببیند
-    if g.admin.get("role") == "instructor":
-        # بررسی دوره فعال
-        active_period = None
-        if PREFERENCES_AVAILABLE:
-            active_period = prefs_module.get_active_preference_period(db)
-        if not active_period:
-            flash("⚠️ در حال حاضر هیچ دوره فعالی برای ثبت مطلوبیت‌ها وجود ندارد. لطفاً بعداً مراجعه کنید.", "warning")
+    is_instructor = (g.admin.get("role") == "instructor")
+    # دوره فعال — ملاک مجاز بودن ثبت مطلوبیت برای اساتید
+    active_period = prefs_module.get_active_preference_period(db)
+    submission_open = (not is_instructor) or bool(active_period)
+    if is_instructor and not active_period:
+        flash("⚠️ در حال حاضر هیچ دوره فعالی برای ثبت مطلوبیت‌ها وجود ندارد. امکان انتخاب درس/زمان غیرفعال است.", "warning")
+    # نقشه واحد‌ها برای کنترل کف/سقف در جدول
+    credits_map = prefs_module.get_credits_map(db) if PREFERENCES_AVAILABLE else {}
+    if is_instructor:
         instructor_username = g.admin.get("username", "")
         all_teaching = prefs_module.get_all_teaching_preferences(db)
         teaching_items = [p for p in all_teaching if p.get("instructor_username") == instructor_username
@@ -1499,7 +1621,7 @@ def admin_preferences():
                      or p.get("instructor_code") == instructor_username]
         unique_courses = db.execute_query("SELECT unique_code, title FROM unique_courses ORDER BY title") or []
         terms = slot_times_module.get_terms()["terms"]
-        # گرفتن max_teaching_units استاد
+        # گرفتن max_teaching_units استاد (کف = max_units، سقف = max_units + ۳)
         max_units = 0
         if INSTRUCTORS_AVAILABLE:
             inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (instructor_username, instructor_username))
@@ -1514,6 +1636,9 @@ def admin_preferences():
             admin=g.admin,
             is_instructor=True,
             max_teaching_units=max_units,
+            active_period=active_period,
+            submission_open=submission_open,
+            credits_map=credits_map,
         )
     teaching_items = prefs_module.get_all_teaching_preferences(db)
     time_items = prefs_module.get_all_time_preferences(db)
@@ -1526,6 +1651,9 @@ def admin_preferences():
         unique_courses=[dict(r) if not isinstance(r, dict) else r for r in unique_courses],
         terms=terms,
         admin=g.admin,
+        active_period=active_period,
+        submission_open=submission_open,
+        credits_map=credits_map,
     )
 
 
@@ -2880,7 +3008,22 @@ def admin_preference_periods():
             pass
     periods = prefs_module.get_all_preference_periods(db) if PREFERENCES_AVAILABLE else []
     active_period = prefs_module.get_active_preference_period(db) if PREFERENCES_AVAILABLE else None
-    return render_template("admin/preference_periods.html", periods=periods, active_period=active_period, admin=g.admin)
+    # توکن یکبارمصرف برای دکمه پاک‌سازی یکپارچه مطلوبیت‌ها
+    import secrets as _secrets
+    pref_reset_token = _secrets.token_urlsafe(32)
+    session["pref_reset_token"] = pref_reset_token
+    # شمارش مطلوبیت‌های ثبت‌شده برای نمایش در کنار دکمه
+    pref_counts = {"teaching": 0, "time": 0}
+    if PREFERENCES_AVAILABLE:
+        try:
+            prefs_module.ensure_preferences_tables(db)
+            tr = db.execute_query("SELECT COUNT(*) AS c FROM teaching_preferences")
+            pref_counts["teaching"] = (tr[0]["c"] if tr else 0)
+            tmr = db.execute_query("SELECT COUNT(*) AS c FROM time_preferences")
+            pref_counts["time"] = (tmr[0]["c"] if tmr else 0)
+        except Exception:
+            pass
+    return render_template("admin/preference_periods.html", periods=periods, active_period=active_period, admin=g.admin, pref_reset_token=pref_reset_token, pref_counts=pref_counts)
 
 
 @app.route("/admin/preference-periods/add", methods=["POST"])
@@ -2960,10 +3103,72 @@ def admin_preference_periods_close(period_id):
     return redirect(url_for("admin_preference_periods"))
 
 
+@app.route("/admin/preference-periods/reset-responses", methods=["POST"])
+@admin_or_instructor_required
+def admin_preference_periods_reset_responses():
+    """پاک‌سازی یکپارچه همه مطلوبیت‌های ثبت‌شده اساتید (تدریس + زمان‌بندی)."""
+    import secrets
+    import sqlite3
+    import uuid
+    if g.admin.get("role") == "instructor":
+        flash("دسترسی فقط برای ادمین مجاز است.", "error")
+        return redirect(url_for("admin_preferences"))
+    if not PREFERENCES_AVAILABLE:
+        flash("ماژول مطلوبیت‌ها فعال نیست.", "error")
+        return redirect(url_for("admin_preference_periods"))
+    token = request.form.get("reset_token", "")
+    expected = session.get("pref_reset_token", "")
+    if not expected or not secrets.compare_digest(token.encode("utf-8"), expected.encode("utf-8")):
+        flash("اعتبار درخواست منقضی شده است؛ صفحه را تازه کنید.", "error")
+        return redirect(url_for("admin_preference_periods"))
+    if request.form.get("confirm") != "1":
+        flash("تأیید پاک‌سازی صحیح نیست.", "error")
+        return redirect(url_for("admin_preference_periods"))
+    # باید همه دوره‌ها بسته باشند (هیچ دوره فعالی نباشد)
+    active = prefs_module.get_active_preference_period(db)
+    if active:
+        flash("ابتدا دوره فعال را ببندید، سپس مطلوبیت‌ها را پاک کنید.", "error")
+        return redirect(url_for("admin_preference_periods"))
+    prefs_module.ensure_preferences_tables(db)
+    conn = None
+    backup_path = None
+    n_teaching = 0
+    n_time = 0
+    try:
+        backup_dir = os.path.join(os.path.dirname(os.path.abspath(db.db_path)), "pref_reset_backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        backup_name = f"before_reset_prefs_{datetime.utcnow():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:8]}.sqlite3"
+        backup_path = os.path.join(backup_dir, backup_name)
+        conn = db.get_connection()
+        with sqlite3.connect(backup_path) as destination:
+            conn.backup(destination)
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute("SELECT id FROM preference_periods WHERE is_active = 1 LIMIT 1").fetchone()
+        if cur is not None:
+            raise RuntimeError("An active period appeared during reset")
+        n_teaching = conn.execute("SELECT COUNT(*) FROM teaching_preferences").fetchone()[0]
+        n_time = conn.execute("SELECT COUNT(*) FROM time_preferences").fetchone()[0]
+        conn.execute("DELETE FROM teaching_preferences")
+        conn.execute("DELETE FROM time_preferences")
+        conn.commit()
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        app.logger.exception("Preference reset failed")
+        flash("پاک‌سازی انجام نشد؛ خطا در لاگ سرور ثبت شد.", "error")
+        return redirect(url_for("admin_preference_periods"))
+    finally:
+        if conn is not None:
+            conn.close()
+    session["pref_reset_token"] = secrets.token_urlsafe(32)
+    audit_log("pref_reset_responses", description=f"Deleted {n_teaching} teaching + {n_time} time prefs; backup: {backup_path}")
+    flash(f"{n_teaching} مطلوبیت تدریس و {n_time} مطلوبیت زمان‌بندی پاک شد. پشتیبان دیتابیس ذخیره شد.", "success")
+    return redirect(url_for("admin_preference_periods"))
+
+
 # ==================================================
 # ===== [v3.13.0] گزارش‌های مطلوبیت‌ها =====
 # ==================================================
-
 @app.route("/admin/preferences-reports")
 @admin_or_instructor_required
 def admin_preferences_reports():

@@ -89,10 +89,11 @@
                 <label class="form-label">نقش پیش‌فرض کاربران جدید</label>
                 <select name="default_role" class="form-select">
                     <option value="user" {% if settings.default_role == 'user' %}selected{% endif %}>دانشجو (user)</option>
+                    <option value="instructor" {% if settings.default_role == 'instructor' %}selected{% endif %}>استاد (instructor)</option>
                     <option value="admin" {% if settings.default_role == 'admin' %}selected{% endif %}>مدیر (admin)</option>
                 </select>
                 <small style="color:var(--text-3);font-size:11px;display:block;margin-top:4px;">
-                    نقشی که به کاربران جدید (که با SSO وارد می‌شوند) داده می‌شود
+                    نقشی که به کاربران جدید (که با SSO وارد می‌شوند) داده می‌شود. استادها مستقیم به صفحه مطلوبیت‌ها هدایت می‌شوند.
                 </small>
             </div>
 
@@ -153,6 +154,24 @@
                         {{ website_url }}/api/auth/sso/callback
                     </code>
                 </div>
+            </div>
+
+            <!-- Service Token (واکشی لیست کاربران توسط SSO) -->
+            <div style="padding:14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:12px;">
+                <div style="font-weight:600;font-size:13px;color:#10b981;margin-bottom:6px;">🔗 توکن سرویس (واکشی لیست کاربران)</div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" name="service_token" class="form-input"
+                           value="{{ settings.service_token }}"
+                           placeholder="یک رشته تصادفی طولانی"
+                           dir="ltr" style="text-align:right;font-family:monospace;flex:1;">
+                    <button type="button" class="btn btn-ghost btn-sm"
+                            onclick="var b=crypto.getRandomValues(new Uint8Array(24));var s='';for(var i=0;i<b.length;i++){s+=('0'+b[i].toString(16)).slice(-2);}document.querySelector('input[name=service_token]').value=s;">🎲 تولید</button>
+                </div>
+                <small style="color:var(--text-3);font-size:11px;display:block;margin-top:6px;line-height:1.7;">
+                    این توکن برای احراز هویت درخواست <code dir="ltr">GET /api/service/users</code> استفاده می‌شود
+                    تا سرور SSO بتواند لیست کاربران سامانه نظرسنجی (با نقش‌ها) را واکشی کند.
+                    راهنمای کامل اتصال: فایل <code>SSO_SERVICE_INTEGRATION.txt</code>.
+                </small>
             </div>
 
             <div style="display:flex;gap:10px;">

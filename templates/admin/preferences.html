@@ -355,7 +355,10 @@
             </thead>
             <tbody>
                 {% for item in teaching_items %}
-                <tr data-search="{{ item.course_name }} {{ item.instructor_name }} {{ item.unique_course_code }}">
+                <tr data-search="{{ item.course_name }} {{ item.instructor_name }} {{ item.unique_course_code }}"
+                    data-teaching-id="{{ item.id }}"
+                    data-code="{{ item.unique_course_code or '' }}"
+                    data-name="{{ item.course_name or '' }}">
                     <td>{{ loop.index }}</td>
                     <td><code>{{ item.unique_course_code or '—' }}</code></td>
                     <td>{{ item.course_name or '—' }}</td>
@@ -552,6 +555,34 @@ let currentDay = null;
 let selectedSlots = [];
 let existingPrefMap = {};  // course_code -> pref_id (برای تشخیص دروس جدید/حذفی همان استاد)
 
+// [v3.15.0] وضعیت مجاز بودن ثبت مطلوبیت (دوره فعال)، کف/سقف واحد و نقشه واحد‌ها
+const SUBMISSION_OPEN = {{ submission_open|default(true)|tojson }};
+const MAX_UNITS_FLOOR = {{ max_teaching_units|default(0) }};   // کف = max_teaching_units استاد
+const CEILING_UNITS = MAX_UNITS_FLOOR + 3;                      // سقف = کف + ۳
+const CREDITS_MAP = {{ credits_map|default({})|tojson }};       // unique_code نرمال‌شده → واحد
+
+function ensureSubmissionOpen() {
+    if (!SUBMISSION_OPEN) {
+        alert('⛔ در حال حاضر دوره فعالی برای ثبت/ویرایش مطلوبیت‌ها وجود ندارد.\nلطفاً تا فعال‌شدن دوره توسط مدیریت صبر کنید.');
+        return false;
+    }
+    return true;
+}
+
+// مجموع واحدهای مطلوبیت‌های تدریس از روی جدول (برای کنترل کف هنگام حذف تک‌رکورد)
+function getTableTeachingCredits(excludeId) {
+    let total = 0;
+    document.querySelectorAll('tr[data-teaching-id]').forEach(tr => {
+        const id = parseInt(tr.getAttribute('data-teaching-id'));
+        if (excludeId && id === excludeId) return;
+        const name = tr.getAttribute('data-name') || '';
+        if (name.indexOf('کارورزی') >= 0 || name.indexOf('پروژه') >= 0) return;
+        const code = tr.getAttribute('data-code') || '';
+        total += CREDITS_MAP[normalizeCode(code)] || 0;
+    });
+    return total;
+}
+
 const faDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
 function toFa(n) { return String(n).replace(/[0-9]/g, d => faDigits[d]); }
 
@@ -620,6 +651,7 @@ function filterTime() {
 
 // ===== Course Picker =====
 async function openCoursePicker() {
+    if (!ensureSubmissionOpen()) return;
     document.getElementById('course-picker-modal').style.display = 'flex';
     selectedCourses.clear();
     existingPrefMap = {};  // ریست نقشه دروس قبلی همین استاد
@@ -850,10 +882,14 @@ async function submitCoursePicker() {
         return;
     }
 
-    // اعتبارسنجی تعداد واحد (کارورزی/پروژه مستثنی)
+    // اعتبارسنجی تعداد واحد (کارورزی/پروژه مستثنی) — کنترل کف و سقف
     const totalCredits = getTotalCredits();
     if (maxUnits > 0 && totalCredits > ceiling) {
         alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) بیشتر از سقف مجاز (${toFa(ceiling)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)\nلطفاً دروس کمتری انتخاب کنید.`);
+        return;
+    }
+    if (maxUnits > 0 && totalCredits < maxUnits) {
+        alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) کمتر از کف مجاز (${toFa(maxUnits)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)\nلطفاً دروس بیشتری انتخاب کنید تا حداقل به کف (${toFa(maxUnits)} واحد) برسید.`);
         return;
     }
 
@@ -1054,6 +1090,7 @@ function removeSelection(idx) {
 }
 
 async function submitTimePicker() {
+    if (!ensureSubmissionOpen()) return;
     if (selectedSlots.length === 0) {
         alert('لطفاً حداقل یک بازه زمانی انتخاب کنید');
         return;
@@ -1109,9 +1146,27 @@ async function editTeaching(id) {
 }
 
 async function deleteTeaching(id) {
-    if (!confirm('حذف شود؟')) return;
-    const r = await fetch(`/api/teaching-preferences/${id}`, {method:'DELETE'});
-    if ((await r.json()).ok) location.reload();
+    if (!ensureSubmissionOpen()) return;
+    // کنترل کف واحد: حذف نباید مجموع را کمتر از کف کند (پیش‌بررسی کلاینت)
+    if (MAX_UNITS_FLOOR > 0) {
+        const after = getTableTeachingCredits(id);
+        if (after < MAX_UNITS_FLOOR) {
+            alert(`⛔ حذف این درس ممکن نیست.\n\nمجموع واحدهای شما پس از حذف (${toFa(after)} واحد) کمتر از کف مجاز (${toFa(MAX_UNITS_FLOOR)} واحد) می‌شود.\n\nبرای حذف، ابتدا از طریق فرم «📚 انتخاب درس‌های مطلوب» یک درس جایگزین ثبت کنید تا کف رعایت شود.`);
+            return;
+        }
+    }
+    if (!confirm('حذف این درس از مطلوبیت‌های شما؟')) return;
+    try {
+        const r = await fetch(`/api/teaching-preferences/${id}`, {method:'DELETE'});
+        const res = await r.json();
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert(res.error || 'خطا در حذف.');
+        }
+    } catch (e) {
+        alert('خطا: ' + e.message);
+    }
 }
 
 async function editTime(id) {
@@ -1120,6 +1175,7 @@ async function editTime(id) {
 }
 
 async function deleteTime(id) {
+    if (!ensureSubmissionOpen()) return;
     if (!confirm('آیا از حذف این زمان مطلوب مطمئن هستید؟')) return;
     try {
         const r = await fetch(`/api/time-preferences/${id}`, {method:'DELETE'});
@@ -1135,6 +1191,7 @@ async function deleteTime(id) {
 }
 
 async function uploadTeachingExcel(input) {
+    if (!ensureSubmissionOpen()) return;
     if (!input.files[0]) return;
     const fd = new FormData();
     fd.append('file', input.files[0]);

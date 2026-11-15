@@ -926,3 +926,94 @@ def delete_preference_period(db, period_id):
     except Exception as e:
         return False, str(e)
 
+
+# ==================================================
+# [v3.15.0] پاک‌سازی یکپارچه مطلوبیت‌ها + کنترل کف/سقف واحد
+# ==================================================
+
+def reset_all_preferences(db):
+    """حذف یکپارچه همه مطلوبیت‌های تدریس و زمان‌بندی همه اساتید.
+    برمی‌گرداند: (deleted_teaching, deleted_time, error)."""
+    import sqlite3 as _sqlite3
+    ensure_preferences_tables(db)
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM teaching_preferences")
+        n_teaching = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM time_preferences")
+        n_time = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM teaching_preferences")
+        cursor.execute("DELETE FROM time_preferences")
+        conn.commit()
+        conn.close()
+        return n_teaching, n_time, None
+    except Exception as e:
+        return 0, 0, str(e)
+
+
+def get_teaching_preference_by_id(db, pref_id):
+    """گرفتن یک رکورد مطلوبیت تدریس با id."""
+    ensure_preferences_tables(db)
+    rows = db.execute_query("SELECT * FROM teaching_preferences WHERE id = ?", (pref_id,))
+    if not rows:
+        return None
+    return dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+
+
+def get_credits_map(db):
+    """نقشه‌ای از unique_code نرمال‌شده → تعداد واحد.
+    مقاوم در برابر تفاوت ارقام فارسی/عربی، فاصله و خط‌تیره بین جداول."""
+    ensure_preferences_tables(db)
+    credits_map = {}
+    try:
+        rows = db.execute_query("SELECT unique_code, credits FROM courses WHERE credits IS NOT NULL")
+        for r in (rows or []):
+            d = r if isinstance(r, dict) else {}
+            uc = normalize_code(d.get("unique_code") or "")
+            cr = d.get("credits") or 0
+            if uc and cr and uc not in credits_map:
+                try:
+                    credits_map[uc] = int(cr)
+                except (ValueError, TypeError):
+                    pass
+    except Exception:
+        pass
+    return credits_map
+
+
+def get_course_credits(db, unique_code, credits_map=None):
+    """گرفتن تعداد واحد یک درس بر اساس unique_code (با تطبیق نرمال‌شده)."""
+    if not unique_code:
+        return 0
+    code = normalize_code(unique_code)
+    if credits_map is None:
+        credits_map = get_credits_map(db)
+    return credits_map.get(code, 0)
+
+
+def get_instructor_total_credits(db, instructor_code, exclude_pref_id=None, credits_map=None):
+    """مجموع واحدهای مطلوبیت‌های تدریس یک استاد (دروس کارورزی/پروژه مستثنی).
+    اگر exclude_pref_id داده شود، آن رکورد از محاسبه خارج می‌شود (پیش‌بینی وضعیت پس از حذف)."""
+    ensure_preferences_tables(db)
+    code = normalize_instructor_code(instructor_code)
+    if not code:
+        return 0
+    if credits_map is None:
+        credits_map = get_credits_map(db)
+    query = "SELECT id, unique_course_code, course_name FROM teaching_preferences WHERE instructor_code = ?"
+    params = (code,)
+    if exclude_pref_id:
+        query += " AND id != ?"
+        params = (code, exclude_pref_id)
+    rows = db.execute_query(query, params)
+    total = 0
+    for r in (rows or []):
+        d = r if isinstance(r, dict) else {}
+        name = d.get("course_name") or ""
+        if "کارورزی" in name or "پروژه" in name:
+            continue
+        uc = normalize_code(d.get("unique_course_code") or "")
+        total += credits_map.get(uc, 0)
+    return total
+
