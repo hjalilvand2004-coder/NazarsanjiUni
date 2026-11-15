@@ -1175,7 +1175,7 @@ def sso_logout():
 
 
 def _sso_fail(error_code):
-    """هد打扮 خطای SSO به صفحه ورود با پیام فارسی."""
+    """هدایت خطای SSO به صفحه ورود با پیام فارسی."""
     msg = sso_module.get_error_message(error_code)
     flash(f"خطای ورود یکپارچه: {msg}", "error")
     return redirect(url_for("student_login") + f"?sso_error={error_code}")
@@ -1366,8 +1366,10 @@ def api_teaching_preferences_delete(pref_id):
     pref = prefs_module.get_teaching_preference_by_id(db, pref_id)
     if not pref:
         return jsonify({"ok": False, "error": "رکورد پیدا نشد"}), 404
-    # کنترل کف واحد: حذف نباید مجموع واحدهای استاد را کمتر از کف (max_teaching_units) کند
-    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE:
+    # کنترل کف واحد: حذف نباید مجموع را کمتر از کف کند.
+    # فقط برای حذف مستقیم از جدول (deleteTeaching). حذف‌های همگام‌سازی مودال
+    # (?sync=1) معافند چون کف روی «وضعیت نهایی» در bulk اعمال می‌شود.
+    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE and request.args.get("sync") != "1":
         inst_code = pref.get("instructor_code") or pref.get("instructor_username") or ""
         max_units = 0
         inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (inst_code, inst_code))
@@ -1410,24 +1412,26 @@ def api_teaching_preferences_bulk():
             max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
         if max_units > 0:
             credits_map = prefs_module.get_credits_map(db)
-            current_total = prefs_module.get_instructor_total_credits(db, inst_code, credits_map=credits_map)
-            existing = prefs_module.get_all_teaching_preferences(db, instructor_code=inst_code)
-            existing_codes = set(prefs_module.normalize_code(p.get("unique_course_code") or "") for p in existing)
-            added = 0
-            for item in items:
-                name = item.get("course_name") or ""
-                if "کارورزی" in name or "پروژه" in name:
-                    continue
-                code = prefs_module.normalize_code(item.get("unique_course_code") or "")
-                if code in existing_codes:
-                    continue  # تکراری → واحد اضافه نمی‌کند
-                added += credits_map.get(code, 0)
-            final_total = current_total + added
-            ceiling = max_units + 3
-            if final_total > ceiling:
-                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) بیشتر از سقف مجاز ({ceiling} واحد) است. کف: {max_units} / سقف: {ceiling} واحد (کارورزی/پروژه مستثنی)."}), 400
-            if final_total < max_units:
-                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) کمتر از کف مجاز ({max_units} واحد) است. حداقل {max_units} واحد باید انتخاب کنید (کارورزی/پروژه مستثنی)."}), 400
+            # فقط در صورت وجود داده واحد اعمال کف/سقف کن؛ وگرنه رد اشتباه نکن.
+            if credits_map:
+                current_total = prefs_module.get_instructor_total_credits(db, inst_code, credits_map=credits_map)
+                existing = prefs_module.get_all_teaching_preferences(db, instructor_code=inst_code)
+                existing_codes = set(prefs_module.normalize_code(p.get("unique_course_code") or "") for p in existing)
+                added = 0
+                for item in items:
+                    name = item.get("course_name") or ""
+                    if "کارورزی" in name or "پروژه" in name:
+                        continue
+                    code = prefs_module.normalize_code(item.get("unique_course_code") or "")
+                    if code in existing_codes:
+                        continue  # تکراری → واحد اضافه نمی‌کند
+                    added += credits_map.get(code, 0)
+                final_total = current_total + added
+                ceiling = max_units + 3
+                if final_total > ceiling:
+                    return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) بیشتر از سقف مجاز ({ceiling} واحد) است. کف: {max_units} / سقف: {ceiling} واحد (کارورزی/پروژه مستثنی)."}), 400
+                if final_total < max_units:
+                    return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) کمتر از کف مجاز ({max_units} واحد) است. حداقل {max_units} واحد باید انتخاب کنید (کارورزی/پروژه مستثنی)."}), 400
     created_ids = []
     errors = []
     skipped_duplicates = 0

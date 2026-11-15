@@ -918,7 +918,9 @@ async function submitCoursePicker() {
         let deletedCount = 0;
         for (const pid of idsToDelete) {
             try {
-                const dr = await fetch('/api/teaching-preferences/' + pid, {method: 'DELETE'});
+                // sync=1 → این حذف بخشی از همگام‌سازی مودال است؛ کنترل کف روی وضعیت نهایی
+                // (در bulk) اعمال می‌شود، نه روی هر حذف میانی.
+                const dr = await fetch('/api/teaching-preferences/' + pid + '?sync=1', {method: 'DELETE'});
                 if (dr.ok) deletedCount++;
             } catch (e) {}
         }
@@ -930,6 +932,12 @@ async function submitCoursePicker() {
                 body: JSON.stringify({items: itemsToAdd}),
             });
             const res = await r.json();
+            if (!res.ok) {
+                // سرور ثبت را رد کرد (کف/سقف یا دوره فعال) — نباید پیغام موفقیت نشان دهیم
+                alert('⚠️ ثبت دروس مطلوب انجام نشد:\n' + (res.error || 'خطای ناشناخته'));
+                location.reload();
+                return;
+            }
             addedCount = res.count || 0;
             if (res.errors && res.errors.length > 0) {
                 // فقط خطاهای واقعی (نه تکراری) را نشان بده
