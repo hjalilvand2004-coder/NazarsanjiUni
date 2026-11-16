@@ -1520,6 +1520,32 @@ def api_time_preferences_bulk_create():
     items = data.get("items", [])
     if not items:
         return jsonify({"ok": False, "error": "لطفاً حداقل یک بازه زمانی انتخاب کنید."}), 400
+    # [v3.16.0] کنترل حداقل ۴ نوبت زمانی برای اساتید با سقف واحد بالای ۱۱
+    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE:
+        inst_code = prefs_module.normalize_instructor_code(
+            items[0].get("instructor_code") or items[0].get("instructor_username") or g.admin.get("username", "")
+        )
+        max_units = 0
+        try:
+            ir = db.execute_query(
+                "SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?",
+                (inst_code, inst_code)
+            )
+            if ir:
+                max_units = (ir[0]["max_teaching_units"] if isinstance(ir[0], dict) else ir[0][0]) or 0
+        except Exception:
+            max_units = 0
+        if max_units > 11:
+            existing = prefs_module.get_all_time_preferences(db, instructor_code=inst_code)
+            existing_keys = set((p.get("day", "") + "|" + (p.get("time_group") or "morning")) for p in existing)
+            new_distinct = 0
+            for it in items:
+                k = (it.get("day", "") + "|" + (it.get("time_group") or "morning"))
+                if k not in existing_keys:
+                    new_distinct += 1
+                    existing_keys.add(k)
+            if len(existing) + new_distinct < 4:
+                return jsonify({"ok": False, "error": "حداقل ۴ نوبت زمانی باید انتخاب کنید (سقف واحد شما بالای ۱۱ است)."}), 400
     created_ids = []
     errors = []
     for item in items:

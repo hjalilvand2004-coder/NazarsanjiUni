@@ -193,6 +193,21 @@
         </div>
     </section>
 
+    {% if sso_enabled %}
+    <!-- ورود یکپارچه (SSO) — گزینه اصلی -->
+    <section style="padding: 0 24px 24px;max-width:1100px;margin:0 auto;">
+        <a href="{{ url_for('sso_login') }}?client=web" style="display:flex;align-items:center;justify-content:center;gap:12px;padding:18px 24px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border-radius:var(--radius-xl);text-decoration:none;font-weight:700;font-size:16px;box-shadow:0 8px 24px rgba(59,130,246,0.35);transition:var(--transition);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+            {{ sso_button_label }}
+        </a>
+        <p style="text-align:center;font-size:12px;color:var(--text-3);margin-top:10px;">
+            ورود یکپارچه برای دانشجو، استاد و مدیر — با حساب سازمانی
+        </p>
+    </section>
+    {% endif %}
+
     <section style="padding: 0 0 40px;">
         <div class="login-cards">
             <!-- ورود دانشجو -->

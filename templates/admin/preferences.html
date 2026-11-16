@@ -24,16 +24,16 @@
     /* تقویم هفتگی */
     .weekly-calendar {
         background: #f8fafc; border: 1px solid #e2e8f0;
-        border-radius: 14px; padding: 18px;
+        border-radius: 12px; padding: 12px;
     }
     .day-btn {
-        padding: 12px 8px;
+        padding: 8px 6px;
         background: #ffffff;
         border: 1.5px solid #e2e8f0;
-        border-radius: 10px;
+        border-radius: 9px;
         cursor: pointer;
         font-family: inherit;
-        font-size: 13px;
+        font-size: 12.5px;
         font-weight: 600;
         color: #475569;
         transition: all 0.2s;
@@ -52,10 +52,10 @@
 
     /* بازه‌های زمانی سه دسته */
     .period-card {
-        padding: 20px;
+        padding: 12px;
         background: #ffffff;
         border: 2px solid #e2e8f0;
-        border-radius: 16px;
+        border-radius: 14px;
         cursor: pointer;
         text-align: center;
         transition: all 0.25s;
@@ -63,22 +63,22 @@
     }
     .period-card:hover {
         border-color: #6366f1;
-        transform: translateY(-3px);
-        box-shadow: 0 8px 20px rgba(99,102,241,0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(99,102,241,0.15);
     }
     .period-card.selected {
         background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(79,70,229,0.05));
         border-color: #6366f1;
     }
     .period-card .period-icon {
-        font-size: 32px;
-        margin-bottom: 8px;
+        font-size: 22px;
+        margin-bottom: 4px;
     }
     .period-card .period-title {
-        font-size: 18px;
+        font-size: 15px;
         font-weight: 700;
         color: #0f172a;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
     .period-card .period-desc {
         font-size: 12px;
@@ -232,17 +232,17 @@
     .selection-item {
         background: #ffffff;
         border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 12px 14px;
+        border-radius: 10px;
+        padding: 8px 10px;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         position: relative;
         color: #1e293b;
     }
     .selection-item .priority-circle {
-        width: 28px;
-        height: 28px;
+        width: 24px;
+        height: 24px;
         background: linear-gradient(135deg, #6366f1, #4f46e5);
         color: white;
         border-radius: 50%;
@@ -250,13 +250,13 @@
         align-items: center;
         justify-content: center;
         font-weight: 700;
-        font-size: 13px;
+        font-size: 12px;
         flex-shrink: 0;
         box-shadow: 0 2px 6px rgba(99,102,241,0.3);
     }
     .selection-item .selection-info {
         flex: 1;
-        font-size: 12px;
+        font-size: 11.5px;
         color: #1e293b;
     }
     .selection-item .selection-info strong {
@@ -273,11 +273,11 @@
         background: #fee2e2;
         color: #ef4444;
         border: none;
-        width: 24px;
-        height: 24px;
+        width: 22px;
+        height: 22px;
         border-radius: 50%;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -472,21 +472,21 @@
 </div>
 
 <!-- ====== Time Picker Modal ====== -->
-<div id="time-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
-    <div class="prefs-modal" style="max-width:1000px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
-        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.05));">
+<div id="time-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+    <div class="prefs-modal" style="max-width:960px;width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px;background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.05));">
             <div>
-                <h3 style="font-size:18px;">📅 انتخاب زمان‌های مطلوب</h3>
-                <p style="font-size:12px;color:#64748b;margin-top:4px;">روز و بازه زمانی مورد نظر خود را بصری انتخاب کنید</p>
+                <h3 style="font-size:16px;">📅 انتخاب زمان‌های مطلوب</h3>
+                <p style="font-size:11px;color:#64748b;margin-top:2px;">روز و بازه زمانی مورد نظر خود را بصری انتخاب کنید</p>
             </div>
             <button onclick="closeTimePicker()" class="close-btn">✕</button>
         </div>
 
-        <div style="padding:20px 28px;overflow-y:auto;flex:1;">
+        <div style="padding:12px 22px;overflow-y:auto;flex:1;">
             <!-- گام ۱: انتخاب روز -->
-            <div class="weekly-calendar" style="margin-bottom:18px;">
-                <h4 style="font-size:14px;color:#0f172a;margin-bottom:10px;">۱. روز هفته را انتخاب کنید</h4>
-                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;">
+            <div class="weekly-calendar" style="margin-bottom:10px;">
+                <h4 style="font-size:13px;color:#0f172a;margin-bottom:6px;">۱. روز هفته را انتخاب کنید</h4>
+                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;">
                     <button class="day-btn" data-day="شنبه" onclick="selectDay('شنبه', this)">شنبه</button>
                     <button class="day-btn" data-day="یکشنبه" onclick="selectDay('یکشنبه', this)">یکشنبه</button>
                     <button class="day-btn" data-day="دوشنبه" onclick="selectDay('دوشنبه', this)">دوشنبه</button>
@@ -497,11 +497,11 @@
             </div>
 
             <!-- گام ۲: انتخاب بازه زمانی (سه دسته) -->
-            <div id="periods-section" style="display:none;margin-bottom:18px;">
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px;">
-                    <h4 style="font-size:14px;color:#0f172a;margin-bottom:4px;">۲. بازه زمانی مورد نظر را انتخاب کنید</h4>
-                    <p id="day-info" style="font-size:12px;color:#64748b;margin-bottom:14px;"></p>
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+            <div id="periods-section" style="display:none;margin-bottom:10px;">
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
+                    <h4 style="font-size:13px;color:#0f172a;margin-bottom:2px;">۲. بازه زمانی مورد نظر را انتخاب کنید</h4>
+                    <p id="day-info" style="font-size:11px;color:#64748b;margin-bottom:8px;"></p>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
                         <div class="period-card" data-period="morning" onclick="selectPeriod('morning', this)">
                             <div class="period-check">✓</div>
                             <div class="period-icon">🌅</div>
@@ -521,22 +521,22 @@
                             <div class="period-desc">از ۱۶:۳۰ تا ۲۰:۳۰</div>
                         </div>
                     </div>
-                    <div style="margin-top:14px;padding:12px;background:#dbeafe;border-radius:10px;font-size:12px;color:#1e40af;">
-                        💡 انتخاب بازه زمانی به این معناست که شما در تمام آن بازه (مثلاً ۷:۳۰ تا ۱۲:۳۰) آماده تدریس هستید.
+                    <div style="margin-top:8px;padding:8px 10px;background:#dbeafe;border-radius:8px;font-size:11px;color:#1e40af;">
+                        💡 انتخاب بازه به این معناست که در تمام آن بازه آماده تدریس هستید.
                     </div>
                 </div>
             </div>
 
             <!-- انتخاب‌های فعلی -->
             <div id="selections-section">
-                <h4 style="font-size:14px;color:#0f172a;margin-bottom:10px;">۳. انتخاب‌های فعلی شما</h4>
-                <div id="current-selections" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;"></div>
-                <p id="no-selections" style="color:#64748b;font-size:13px;text-align:center;padding:20px;">هنوز هیچ زمانی انتخاب نکرده‌اید</p>
+                <h4 style="font-size:13px;color:#0f172a;margin-bottom:6px;">۳. انتخاب‌های فعلی شما</h4>
+                <div id="current-selections" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;"></div>
+                <p id="no-selections" style="color:#64748b;font-size:12px;text-align:center;padding:12px;">هنوز هیچ زمانی انتخاب نکرده‌اید</p>
             </div>
         </div>
 
-        <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;">
-            <div style="font-size:13px;color:#475569;">
+        <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:10px 22px;">
+            <div style="font-size:12px;color:#475569;">
                 <span id="selected-slots-count">۰</span> بازه زمانی انتخاب‌شده
             </div>
             <div style="display:flex;gap:10px;">
@@ -554,6 +554,7 @@ let selectedCourses = new Set();
 let currentDay = null;
 let selectedSlots = [];
 let existingPrefMap = {};  // course_code -> pref_id (برای تشخیص دروس جدید/حذفی همان استاد)
+let existingTimeMap = {};  // "day|time_group" -> pref_id (مطلوبیت‌های زمانی فعلی همین استاد، برای همگام‌سازی)
 
 // [v3.15.0] وضعیت مجاز بودن ثبت مطلوبیت (دوره فعال)، کف/سقف واحد و نقشه واحد‌ها
 const SUBMISSION_OPEN = {{ submission_open|default(true)|tojson }};
@@ -972,13 +973,16 @@ async function openTimePicker() {
     document.getElementById('time-picker-modal').style.display = 'flex';
     selectedSlots = [];
     currentDay = null;
+    existingTimeMap = {};  // ریست نقشه مطلوبیت‌های زمانی فعلی همین استاد
     document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.period-card').forEach(c => c.classList.remove('selected'));
     document.getElementById('periods-section').style.display = 'none';
-    
-    // بارگذاری زمان‌های قبلی
+
+    // بارگذاری زمان‌های قبلی «همین استاد» — مطلوبیت زمانی یونیک هر استاد
+    const admin = {{ admin | tojson }};
+    const instCode = encodeURIComponent(admin.username || '');
     try {
-        const r = await fetch('/api/time-preferences');
+        const r = await fetch('/api/time-preferences?instructor_code=' + instCode);
         const data = await r.json();
         if (data.ok && data.items) {
             data.items.forEach(p => {
@@ -993,6 +997,8 @@ async function openTimePicker() {
                         end_time: p.end_time || periodInfo.end,
                         priority: p.priority || (selectedSlots.length + 1),
                     });
+                    // ثبت در نقشه برای همگام‌سازی (حذف/ثبت)
+                    existingTimeMap[p.day + '|' + period] = p.id;
                 }
             });
             // بازشماری اولویت‌ها
@@ -1001,7 +1007,7 @@ async function openTimePicker() {
     } catch (e) {
         console.log('Could not load existing time preferences:', e);
     }
-    
+
     renderSelections();
 }
 
@@ -1104,35 +1110,66 @@ async function submitTimePicker() {
         return;
     }
     const admin = {{ admin | tojson }};
-    const items = selectedSlots.map(s => ({
-        day: s.day,
-        instructor_code: admin.username,
-        instructor_name: admin.full_name || admin.username,
-        instructor_username: admin.username,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        time_group: s.period,
-        priority: s.priority,
-        status: true,
-    }));
+    const maxUnits = {{ max_teaching_units|default(0) }};
+    // کنترل تعداد نوبت زمانی برای اساتید با سقف واحد بالای ۱۱
+    if (maxUnits > 11 && selectedSlots.length < 4) {
+        alert('⛔ حداقل ۴ نوبت زمانی باید انتخاب کنید.\n\nسقف واحدهای شما ' + toFa(maxUnits) + ' واحد است؛ اساتیدی که سقف واحدشان بالای ۱۱ واحد است باید حداقل ۴ نوبت زمانی (صبح/ظهر/بعدازظهر در روزهای مختلف) را انتخاب کنند.\n\nشما تا کنون ' + toFa(selectedSlots.length) + ' نوبت انتخاب کرده‌اید.');
+        return;
+    }
+    // همگام‌سازی: محاسبه نوبت‌های حذفی و جدید (مطلوبیت زمانی یونیک هر استاد)
+    const currentKeys = new Set(selectedSlots.map(s => s.day + '|' + s.period));
+    const idsToDelete = [];
+    for (const [key, pid] of Object.entries(existingTimeMap)) {
+        if (!currentKeys.has(key)) idsToDelete.push(pid);
+    }
+    const itemsToAdd = selectedSlots
+        .filter(s => !existingTimeMap[s.day + '|' + s.period])
+        .map(s => ({
+            day: s.day,
+            instructor_code: admin.username,
+            instructor_name: admin.full_name || admin.username,
+            instructor_username: admin.username,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            time_group: s.period,
+            priority: s.priority,
+            status: true,
+        }));
+
+    if (idsToDelete.length === 0 && itemsToAdd.length === 0) {
+        alert('هیچ تغییری برای ذخیره وجود ندارد.');
+        return;
+    }
+    if (!confirm('آیا از ذخیره مطلوبیت‌های زمان مطمئن هستید؟\n\n➕ نوبت‌های جدید: ' + toFa(itemsToAdd.length) + '\n🗑️ نوبت‌های حذف‌شده: ' + toFa(idsToDelete.length))) return;
+
     try {
-        const r = await fetch('/api/time-preferences/bulk', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({items}),
-        });
-        const res = await r.json();
-        if (res.ok) {
-            alert(toFa(res.count) + ' مطلوبیت زمان ثبت شد');
-            closeTimePicker();
-            location.reload();
-        } else {
-            let msg = 'خطا: ' + (res.error || 'نامشخص');
-            if (res.errors && res.errors.length > 0) {
-                msg += '\n\nخطاها:\n' + res.errors.join('\n');
-            }
-            alert(msg);
+        // ابتدا حذف نوبت‌های برداشته‌شده
+        for (const pid of idsToDelete) {
+            try { await fetch('/api/time-preferences/' + pid, {method:'DELETE'}); } catch(e){}
         }
+        // سپس ثبت نوبت‌های جدید
+        let addedCount = 0;
+        if (itemsToAdd.length > 0) {
+            const r = await fetch('/api/time-preferences/bulk', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({items: itemsToAdd}),
+            });
+            const res = await r.json();
+            if (!res.ok) {
+                alert('⚠️ ثبت مطلوبیت‌های زمان انجام نشد:\n' + (res.error || 'خطای ناشناخته'));
+                location.reload();
+                return;
+            }
+            addedCount = res.count || 0;
+        }
+        let msg = '✅ ذخیره شد.\n';
+        msg += '➕ نوبت‌های جدید: ' + toFa(addedCount) + '\n';
+        msg += '🗑️ نوبت‌های حذف‌شده: ' + toFa(idsToDelete.length) + '\n';
+        if (addedCount === 0 && idsToDelete.length === 0) msg = '✅ ذخیره شد — هیچ تغییری اعمال نشد.';
+        alert(msg);
+        closeTimePicker();
+        location.reload();
     } catch (e) {
         alert('خطا: ' + e.message);
     }

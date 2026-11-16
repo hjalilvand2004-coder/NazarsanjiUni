@@ -25,6 +25,21 @@
                 {% endfor %}
             {% endwith %}
 
+            {% if sso_enabled %}
+            <!-- دکمه ورود یکپارچه SSO -->
+            <a href="{{ url_for('sso_login') }}?client=web" class="btn" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-bottom:14px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;padding:12px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;border:none;box-shadow:0 4px 12px rgba(59,130,246,0.3);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                </svg>
+                {{ sso_button_label }}
+            </a>
+            <div style="display:flex;align-items:center;gap:10px;margin:14px 0;">
+                <hr style="flex:1;border:none;border-top:1px solid var(--glass-border);">
+                <span style="font-size:11px;color:var(--text-3);">یا با نام کاربری مدیر</span>
+                <hr style="flex:1;border:none;border-top:1px solid var(--glass-border);">
+            </div>
+            {% endif %}
+
             <form method="POST" action="{{ url_for('admin_login') }}">
                 <div class="form-group">
                     <label class="form-label">نام کاربری</label>
