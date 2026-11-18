@@ -206,26 +206,33 @@ def ensure_instructors_table(db):
         except Exception:
             pass
 
-        # [v3.18.0] بک‌فیل یک‌باره‌ی کف/سقف/واحد موردنظر بر اساس نوع همکاری.
-        # فقط زمانی اجرا می‌شود که هنوز هیچ استادی min_units نداشته باشد (یک‌بار).
-        # پس از آن، ویرایش‌های دستی محترم شمرده می‌شوند.
+        # [v3.18.1] همگام‌سازی قطعی کف/سقف/وحد موردنظر بر اساس نوع همکاری.
+        # برای هر استاد با نوع همکاری شناخته‌شده، مقادیر min/max/desired مطابق قاعده
+        # تنظیم می‌شود — فقط ردیف‌هایی که با قاعده تطابق ندارند به‌روز می‌شوند (idempotent).
+        # این تضمین می‌کند اساتیدی که اخیراً اضافه شده‌اند هم مقادیر صحیح بگیرند
+        # (برخلاف بک‌فیل یک‌باره که بعد از اولین اجرا دیگر اجرا نمی‌شد).
         try:
-            cnt_min = cursor.execute("SELECT COUNT(*) FROM instructors WHERE min_units > 0").fetchone()
-            cnt_min = cnt_min[0] if cnt_min else 0
-            if cnt_min == 0:
-                rows = cursor.execute("SELECT id, cooperation_type FROM instructors").fetchall()
-                for r in rows:
-                    rid = r[0]
-                    ct = r[1] if len(r) > 1 else ""
-                    rule = get_units_rule(ct)
-                    if rule:
-                        cursor.execute(
-                            "UPDATE instructors SET min_units = ?, max_teaching_units = ?, desired_units = ? WHERE id = ?",
-                            (rule["min"], rule["max"], rule["desired"], rid),
-                        )
-                logger.info("✓ instructors units backfilled by cooperation type")
+            rows = cursor.execute(
+                "SELECT id, cooperation_type, min_units, max_teaching_units, desired_units FROM instructors"
+            ).fetchall()
+            updated = 0
+            for r in rows:
+                rid = r[0]
+                ct = r[1] if len(r) > 1 else ""
+                cur_min = r[2] if len(r) > 2 and r[2] is not None else 0
+                cur_max = r[3] if len(r) > 3 and r[3] is not None else 0
+                cur_des = r[4] if len(r) > 4 and r[4] is not None else 0
+                rule = get_units_rule(ct)
+                if rule and (cur_min != rule["min"] or cur_max != rule["max"] or cur_des != rule["desired"]):
+                    cursor.execute(
+                        "UPDATE instructors SET min_units = ?, max_teaching_units = ?, desired_units = ? WHERE id = ?",
+                        (rule["min"], rule["max"], rule["desired"], rid),
+                    )
+                    updated += 1
+            if updated:
+                logger.info(f"✓ instructors units synced by cooperation type ({updated} rows updated)")
         except Exception as e:
-            logger.warning(f"instructors units backfill skipped: {e}")
+            logger.warning(f"instructors units sync skipped: {e}")
 
         conn.commit()
         logger.info("✓ instructors table ensured (with column migrations + user_type defaults)")

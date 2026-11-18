@@ -302,16 +302,16 @@
 
 {% if is_instructor %}
 <!-- [v3.18.0] پیغام خوش‌آمدگویی استاد -->
-<div style="background:linear-gradient(135deg,rgba(99,102,241,0.10),rgba(139,92,246,0.06));border:1px solid #e2e8f0;border-radius:14px;padding:14px 20px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;">
-    <div style="font-size:15px;color:#0f172a;font-weight:700;">
+<div style="background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(139,92,246,0.10));border:1px solid var(--glass-border);border-radius:14px;padding:14px 20px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;">
+    <div style="font-size:15px;color:var(--text-1);font-weight:700;">
         👋 سلام استاد {{ instructor_full_name }}
-        {% if instructor_cooperation_type %}<span style="color:#6366f1;font-weight:600;"> — نوع همکاری: {{ instructor_cooperation_type }}</span>{% endif %}
+        {% if instructor_cooperation_type %}<span style="color:var(--accent);font-weight:600;"> — نوع همکاری: {{ instructor_cooperation_type }}</span>{% endif %}
     </div>
     {% if min_units and min_units > 0 %}
     <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;">
-        <span style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px 10px;">کف: <strong style="color:#0ea5e9;">{{ min_units }}</strong> واحد</span>
-        <span style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px 10px;">سقف: <strong style="color:#ef4444;">{{ max_units }}</strong> واحد</span>
-        <span style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px 10px;">واحد مورد نظر: <strong style="color:#6366f1;">{{ desired_units }}</strong></span>
+        <span style="background:var(--bg-2);border:1px solid var(--glass-border);border-radius:8px;padding:4px 10px;color:var(--text-2);">کف: <strong style="color:#0ea5e9;">{{ min_units }}</strong> واحد</span>
+        <span style="background:var(--bg-2);border:1px solid var(--glass-border);border-radius:8px;padding:4px 10px;color:var(--text-2);">سقف: <strong style="color:#ef4444;">{{ max_units }}</strong> واحد</span>
+        <span style="background:var(--bg-2);border:1px solid var(--glass-border);border-radius:8px;padding:4px 10px;color:var(--text-2);">واحد مورد نظر: <strong style="color:var(--accent);">{{ desired_units }}</strong></span>
     </div>
     {% endif %}
 </div>
@@ -468,7 +468,7 @@
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;">
             <div>
                 <h3 style="font-size:18px;">📚 انتخاب درس‌های مطلوب</h3>
-                <p style="font-size:12px;color:#64748b;margin-top:4px;">درس‌های مورد علاقه خود را انتخاب کنید — بر اساس گروه دسته‌بندی شده</p>
+                <p style="font-size:12px;color:var(--text-3);margin-top:4px;">درس‌های مورد علاقه خود را انتخاب کنید — بر اساس گروه دسته‌بندی شده</p>
             </div>
             <button onclick="closeCoursePicker()" class="close-btn">✕</button>
         </div>
@@ -485,11 +485,11 @@
                 <div style="font-size:13px;color:#475569;" id="course-count-display">
                     <span id="selected-courses-count">۰</span> درس انتخاب‌شده
                 </div>
-                {% if min_units and min_units > 0 %}
+                {% if is_instructor %}
                 <div id="desired-units-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <label for="desired-units-input" style="font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap;">🎯 تعداد واحد مطلوب برای تدریس:</label>
-                    <input type="number" id="desired-units-input" inputmode="numeric" min="{{ min_units }}" max="{{ max_units }}" value="{{ desired_units }}" style="width:84px;padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;font-weight:700;text-align:center;color:#1e293b;font-family:inherit;" oninput="onDesiredUnitsInput(this)">
-                    <span id="desired-units-hint" style="font-size:11px;color:#64748b;white-space:nowrap;">کف {{ min_units }} تا سقف {{ max_units }} واحد</span>
+                    <input type="number" id="desired-units-input" inputmode="numeric" min="{{ min_units }}" max="{{ max_units }}" value="{{ desired_units }}" style="width:84px;padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;font-weight:700;text-align:center;color:#1e293b;background:#ffffff;font-family:inherit;" oninput="onDesiredUnitsInput(this)">
+                    <span id="desired-units-hint" style="font-size:11px;color:#64748b;white-space:nowrap;">{% if min_units and min_units > 0 %}کف {{ min_units }} تا سقف {{ max_units }} واحد{% else %}نوع همکاری شما در جدول اساتید مشخص نشده است{% endif %}</span>
                 </div>
                 {% endif %}
             </div>
@@ -901,7 +901,7 @@ function updateCourseCount() {
     document.getElementById('course-count-display').innerHTML = html;
 }
 
-// [v3.17.0] اعتبارسنجی زنده فیلد «تعداد واحد مطلوب برای تدریس» (فقط عدد، کف..کف+۳)
+// [v3.18.0] اعتبارسنجی زنده فیلد «تعداد واحد مطلوب برای تدریس» (فقط عدد، کف..سقف)
 function onDesiredUnitsInput(input) {
     // فقط عدد مجاز است (حذف ارقام فارسی/غیرعددی)
     let v = String(input.value).replace(/[^\d]/g, '');
@@ -910,10 +910,16 @@ function onDesiredUnitsInput(input) {
     const ceiling = CEILING_UNITS;      // سقف
     const hint = document.getElementById('desired-units-hint');
     if (!hint) return;
+    // اگر کف/سقف مشخص نیست (نوع همکاری نامشخص)، اعتبارسنجی نمی‌شود
+    if (maxUnits <= 0) {
+        hint.textContent = 'نوع همکاری شما در جدول اساتید مشخص نشده است';
+        hint.style.color = 'var(--warning)';
+        return;
+    }
     const val = parseInt(v);
     if (v === '') {
         hint.textContent = `کف ${toFa(maxUnits)} تا سقف ${toFa(ceiling)} واحد`;
-        hint.style.color = '#64748b';
+        hint.style.color = 'var(--text-3)';
     } else if (val < maxUnits) {
         hint.textContent = `⚠️ کمتر از کف (${toFa(maxUnits)})`;
         hint.style.color = '#ef4444';
