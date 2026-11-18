@@ -117,6 +117,7 @@ def ensure_preferences_tables(db):
                 status TEXT DEFAULT 'pending',
                 term_code TEXT,
                 priority INTEGER DEFAULT 999,
+                desired_credits INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -166,8 +167,17 @@ def ensure_preferences_tables(db):
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pref_periods_active ON preference_periods(is_active)")
 
+        # مایگریشن additive: افزودن ستون desired_credits به teaching_preferences
+        # در صورت عدم وجود (برای پایگاه‌داده‌های قدیمی‌تر).
+        try:
+            tp_cols = [r[1] for r in cursor.execute("PRAGMA table_info(teaching_preferences)").fetchall()]
+            if tp_cols and "desired_credits" not in tp_cols:
+                cursor.execute("ALTER TABLE teaching_preferences ADD COLUMN desired_credits INTEGER")
+        except Exception as _migr_err:
+            logger.warning(f"migration desired_credits skipped: {_migr_err}")
+
         conn.commit()
-        logger.info("✓ preferences tables ensured (teaching + time + periods)")
+    logger.info("✓ preferences tables ensured (teaching + time + periods)")
     return True
 
 
@@ -208,9 +218,11 @@ def create_teaching_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int],
         INSERT INTO teaching_preferences
             (unique_course_code, course_name, cooperation_type, expert_group,
              row_number, instructor_code, instructor_name, instructor_username,
-             status, term_code, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             status, term_code, priority, desired_credits)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
+    _dc = data.get("desired_credits")
+    desired_credits = int(_dc) if (_dc is not None and str(_dc).strip() != "") else None
     params = (
         unique_code,
         data.get("course_name", ""),
@@ -223,6 +235,7 @@ def create_teaching_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int],
         data.get("status", "pending"),
         data.get("term_code", ""),
         data.get("priority") or 999,
+        desired_credits,
     )
     try:
         conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
@@ -247,30 +260,106 @@ def create_teaching_preference(db, data: Dict[str, Any]) -> Tuple[Optional[int],
 
 def update_teaching_preference(db, pref_id: int, data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """ویرایش مطلوبیت تدریس."""
-    existing = db.execute_query("SELECT id FROM teaching_preferences WHERE id = ?", (pref_id,))
+    existing = db.execute_query("SELECT * FROM teaching_preferences WHERE id = ?", (pref_id,))
     if not existing:
         return False, "رکورد پیدا نشد"
+    existing = existing[0]
+    if not isinstance(existing, dict):
+        existing = dict(existing)
 
-    unique_code = normalize_code(data.get("unique_course_code", ""))
-    instructor_code = normalize_instructor_code(data.get("instructor_code", ""))
+    # [v3.17.0] به‌روزرسانی جزئی: هر فیلدی که در data نیامده، مقدار فعلی‌اش حفظ می‌شود.
+    # این از صفر شدن instructor_code/instructor_username/row_number و... در PUTهای
+    # فقط-وضعیت (مثل editTeaching) جلوگیری می‌کند.
+    def pick(key, default=""):
+        if key in data:
+            v = data.get(key)
+            return v if v is not None else default
+        ev = existing.get(key)
+        return ev if ev is not None else default
+
+    unique_code = normalize_code(pick("unique_course_code") or existing.get("unique_course_code") or "")
+    instructor_code = normalize_instructor_code(pick("instructor_code") or existing.get("instructor_code") or "")
+    course_name = pick("course_name")
+    cooperation_type = pick("cooperation_type")
+    expert_group = pick("expert_group")
+    row_number = pick("row_number") or 0
+    instructor_name = pick("instructor_name")
+    instructor_username = pick("instructor_username")
+    status = pick("status", "pending")
+    term_code = pick("term_code")
+
+    # desired_credits: فقط اگر در data آمده باشد تغییر می‌کند؛ وگرنه مقدار فعلی حفظ می‌شود.
+    if "desired_credits" in data:
+        _dc = data.get("desired_credits")
+        desired_credits = int(_dc) if (_dc is not None and str(_dc).strip() != "") else None
+    else:
+        desired_credits = existing.get("desired_credits")
+
+    # priority: فقط اگر در data آمده باشد تغییر می‌کند؛ وگرنه مقدار فعلی حفظ می‌شود.
+    if "priority" in data:
+        priority_val = data.get("priority") or 999
+    else:
+        priority_val = existing.get("priority") or 999
 
     query = """
         UPDATE teaching_preferences SET
             unique_course_code = ?, course_name = ?, cooperation_type = ?,
             expert_group = ?, row_number = ?, instructor_code = ?,
             instructor_name = ?, instructor_username = ?, status = ?,
-            term_code = ?, priority = ?, updated_at = CURRENT_TIMESTAMP
+            term_code = ?, priority = ?, desired_credits = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     """
     params = (
-        unique_code, data.get("course_name", ""), data.get("cooperation_type", ""),
-        data.get("expert_group", ""), data.get("row_number") or 0,
-        instructor_code, data.get("instructor_name", ""),
-        data.get("instructor_username", ""), data.get("status", "pending"),
-        data.get("term_code", ""), data.get("priority") or 999, pref_id,
+        unique_code, course_name, cooperation_type, expert_group, row_number,
+        instructor_code, instructor_name, instructor_username, status,
+        term_code, priority_val, desired_credits, pref_id,
     )
     result = db.execute_query(query, params)
     return (result is not None), None
+
+
+def update_desired_units_for_instructor(db, instructor_code: str, desired_credits) -> bool:
+    """به‌روزرسانی desired_credits روی همه ردیف‌های مطلوبیت تدریس یک استاد.
+    این مقدار یک عدد واحد برای کل مطلوبیت تدریس استاد است و روی همه ردیف‌ها
+    یکسان نگه‌داری می‌شود تا یکپارچگی حفظ شود."""
+    import sqlite3 as _sqlite3
+    ensure_preferences_tables(db)
+    inst = normalize_instructor_code(instructor_code or "")
+    if not inst:
+        return False
+    _dc = desired_credits
+    val = int(_dc) if (_dc is not None and str(_dc).strip() != "") else None
+    try:
+        conn = _sqlite3.connect(db.db_path, timeout=30, check_same_thread=False)
+        conn.execute(
+            "UPDATE teaching_preferences SET desired_credits = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE instructor_code = ?",
+            (val, inst),
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"update_desired_units_for_instructor error: {e}")
+        return False
+
+
+def get_desired_units_for_instructor(db, instructor_code: str):
+    """گرفتن desired_credits فعلی استاد (از اولین ردیف مطلوبیت تدریس)."""
+    ensure_preferences_tables(db)
+    inst = normalize_instructor_code(instructor_code or "")
+    if not inst:
+        return None
+    rows = db.execute_query(
+        "SELECT desired_credits FROM teaching_preferences WHERE instructor_code = ? "
+        "AND desired_credits IS NOT NULL LIMIT 1",
+        (inst,)
+    )
+    if not rows:
+        return None
+    r = rows[0]
+    r = r if isinstance(r, dict) else dict(r)
+    return r.get("desired_credits")
 
 
 def delete_teaching_preference(db, pref_id: int) -> Tuple[bool, Optional[str]]:

@@ -348,6 +348,7 @@
                     <th>نام استاد</th>
                     <th>گروه تخصصی</th>
                     <th>نوع همکاری</th>
+                    <th>اولویت</th>
                     <th>وضعیت</th>
                     <th>کد ترم</th>
                     <th>عملیات</th>
@@ -365,6 +366,7 @@
                     <td>{{ item.instructor_name or '—' }}</td>
                     <td>{{ item.expert_group or '—' }}</td>
                     <td>{{ item.cooperation_type or '—' }}</td>
+                    <td><strong style="color:#6366f1;">{% if item.priority and item.priority != 999 %}{{ item.priority }}{% else %}—{% endif %}</strong></td>
                     <td>
                         {% if item.status == 'approved' %}<span class="badge badge-success">تأیید شده</span>
                         {% elif item.status == 'rejected' %}<span class="badge badge-danger">رد شده</span>
@@ -379,7 +381,7 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">
+                <tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-3);">
                     هیچ مطلوبیت تدریسی ثبت نشده است. با دکمه «📚 انتخاب درس‌های مطلوب» شروع کنید.
                 </td></tr>
                 {% endfor %}
@@ -458,12 +460,23 @@
             <div id="course-groups-container">
                 <!-- پر می‌شود -->
             </div>
+            <!-- [v3.17.0] پنل اولویت‌بندی دروس انتخابی -->
+            <div id="course-priority-panel" style="margin-top:16px;"></div>
         </div>
-        <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:16px 28px;">
-            <div style="font-size:13px;color:#475569;" id="course-count-display">
-                <span id="selected-courses-count">۰</span> درس انتخاب‌شده
+        <div class="modal-footer" style="display:flex;flex-direction:column;gap:10px;padding:14px 22px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">
+                <div style="font-size:13px;color:#475569;" id="course-count-display">
+                    <span id="selected-courses-count">۰</span> درس انتخاب‌شده
+                </div>
+                {% if max_teaching_units and max_teaching_units > 0 %}
+                <div id="desired-units-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <label for="desired-units-input" style="font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap;">🎯 تعداد واحد مطلوب برای تدریس:</label>
+                    <input type="number" id="desired-units-input" inputmode="numeric" min="{{ max_teaching_units }}" max="{{ max_teaching_units + 3 }}" value="{{ max_teaching_units }}" style="width:84px;padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;font-weight:700;text-align:center;color:#1e293b;font-family:inherit;" oninput="onDesiredUnitsInput(this)">
+                    <span id="desired-units-hint" style="font-size:11px;color:#64748b;white-space:nowrap;">کف {{ max_teaching_units }} تا سقف {{ max_teaching_units + 3 }} واحد</span>
+                </div>
+                {% endif %}
             </div>
-            <div style="display:flex;gap:10px;">
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
                 <button onclick="closeCoursePicker()" class="btn btn-ghost">❌ انصراف</button>
                 <button onclick="submitCoursePicker()" class="btn btn-primary">💾 ذخیره انتخاب‌ها</button>
             </div>
@@ -555,6 +568,8 @@ let currentDay = null;
 let selectedSlots = [];
 let existingPrefMap = {};  // course_code -> pref_id (برای تشخیص دروس جدید/حذفی همان استاد)
 let existingTimeMap = {};  // "day|time_group" -> pref_id (مطلوبیت‌های زمانی فعلی همین استاد، برای همگام‌سازی)
+let coursePriorities = {};       // course_id -> اولویت (عدد صحیح) — اولویت‌بندی دروس انتخابی
+let existingPrefPriority = {};   // normalizeCode -> اولویت ثبت‌شده قبلی (برای تشخیص تغییر اولویت)
 
 // [v3.15.0] وضعیت مجاز بودن ثبت مطلوبیت (دوره فعال)، کف/سقف واحد و نقشه واحد‌ها
 const SUBMISSION_OPEN = {{ submission_open|default(true)|tojson }};
@@ -635,6 +650,22 @@ function switchTab(tab) {
     });
 }
 
+// [v3.17.0] بازبارگذاری صفحه روی تب مشخص (تا پس از عملیات، همان جدول بماند)
+function reloadOnTab(tab) {
+    const u = new URL(location.href);
+    u.searchParams.set('tab', tab);
+    location.href = u.toString();
+}
+
+// [v3.17.0] حفظ تب فعال پس از reload — اگر ?tab= وجود داشت، همان تب نمایش داده شود
+(function(){
+    const t = new URLSearchParams(location.search).get('tab');
+    if (t === 'time' || t === 'teaching') {
+        // بعد از DOM آماده شد
+        document.addEventListener('DOMContentLoaded', function(){ switchTab(t); });
+    }
+})();
+
 function filterTeaching() {
     const q = document.getElementById('teaching-search').value.toLowerCase();
     document.querySelectorAll('#tab-teaching tbody tr').forEach(tr => {
@@ -656,6 +687,8 @@ async function openCoursePicker() {
     document.getElementById('course-picker-modal').style.display = 'flex';
     selectedCourses.clear();
     existingPrefMap = {};  // ریست نقشه دروس قبلی همین استاد
+    coursePriorities = {};        // [v3.17.0] ریست اولویت‌ها
+    existingPrefPriority = {};    // [v3.17.0] ریست نقشه اولویت‌های قبلی
     if (Object.keys(courseGroups).length === 0) {
         try {
             const r = await fetch('/api/courses/by-group');
@@ -679,6 +712,7 @@ async function openCoursePicker() {
                 const nkey = normalizeCode(p.unique_course_code);
                 if (nkey) {
                     existingPrefMap[nkey] = p.id;  // کلید نرمال‌شده -> pref_id
+                    existingPrefPriority[nkey] = (p.priority && p.priority !== 999) ? p.priority : null;  // [v3.17.0]
                     // تطبیق با allCourses با کد نرمال‌شده (unique_code یا code)
                     const course = allCourses.find(c => normalizeCode(c.unique_code || c.code) == nkey);
                     if (course) {
@@ -687,12 +721,28 @@ async function openCoursePicker() {
                     }
                 }
             });
+            // [v3.17.0] پیش‌پر کردن فیلد «تعداد واحد مطلوب برای تدریس» از مقدار ثبت‌شده قبلی
+            const dcItem = data.items.find(p => p.desired_credits !== null && p.desired_credits !== undefined);
+            const dcInput = document.getElementById('desired-units-input');
+            if (dcInput && dcItem) dcInput.value = dcItem.desired_credits;
         }
     } catch (e) {
         console.log('Could not load existing preferences:', e);
     }
+    // [v3.17.0] ساخت اولویت‌ها برای دروس از پیش انتخاب‌شده (بر اساس اولویت ثبت‌شده قبلی
+    // یا ترتیب ظاهر در allCourses)
+    let seq = 1;
+    for (const id of selectedCourses) {
+        const course = allCourses.find(c => (c.id || c.unique_code) == id);
+        const nkey = course ? normalizeCode(course.unique_code || course.code || '') : '';
+        const existingPr = nkey ? existingPrefPriority[nkey] : null;
+        coursePriorities[id] = existingPr || seq;
+        seq++;
+    }
+    renumberPriorities();
     renderCourseGroups();
     updateCourseCount();
+    renderPriorityPanel();
 }
 
 function closeCoursePicker() {
@@ -779,8 +829,14 @@ function toggleCourse(id) {
             }
         }
         selectedCourses.add(id);
+        // [v3.17.0] تخصیص اولویت پیش‌فرض = ترتیب انتخاب (بزرگ‌ترین+۱ یا ۱)
+        const vals = Object.values(coursePriorities);
+        coursePriorities[id] = vals.length > 0 ? Math.max(...vals) + 1 : 1;
     } else {
         selectedCourses.delete(id);
+        // [v3.17.0] حذف اولویت و بازشماری ۱..N برای حفظ ترتیب پیوسته
+        delete coursePriorities[id];
+        renumberPriorities();
     }
     const card = document.querySelector(`.course-pick-card[data-id="${id}"]`);
     if (card) {
@@ -789,6 +845,14 @@ function toggleCourse(id) {
         if (cb) cb.checked = selectedCourses.has(id);
     }
     updateCourseCount();
+    renderPriorityPanel();
+}
+
+// [v3.17.0] بازشماری اولویت‌ها به ۱..N بر اساس ترتیب فعلی
+function renumberPriorities() {
+    const ids = Object.keys(coursePriorities)
+        .sort((a, b) => (coursePriorities[a] || 999) - (coursePriorities[b] || 999));
+    ids.forEach((id, i) => { coursePriorities[id] = i + 1; });
 }
 
 function getTotalCredits() {
@@ -818,6 +882,68 @@ function updateCourseCount() {
     document.getElementById('course-count-display').innerHTML = html;
 }
 
+// [v3.17.0] اعتبارسنجی زنده فیلد «تعداد واحد مطلوب برای تدریس» (فقط عدد، کف..کف+۳)
+function onDesiredUnitsInput(input) {
+    // فقط عدد مجاز است (حذف ارقام فارسی/غیرعددی)
+    let v = String(input.value).replace(/[^\d]/g, '');
+    if (v !== String(input.value)) input.value = v;
+    const maxUnits = {{ max_teaching_units|default(0) }};
+    const hint = document.getElementById('desired-units-hint');
+    if (!hint) return;
+    const val = parseInt(v);
+    if (v === '') {
+        hint.textContent = `کف ${toFa(maxUnits)} تا سقف ${toFa(maxUnits + 3)} واحد`;
+        hint.style.color = '#64748b';
+    } else if (val < maxUnits) {
+        hint.textContent = `⚠️ کمتر از کف (${toFa(maxUnits)})`;
+        hint.style.color = '#ef4444';
+    } else if (val > maxUnits + 3) {
+        hint.textContent = `⚠️ بیشتر از سقف (${toFa(maxUnits + 3)})`;
+        hint.style.color = '#ef4444';
+    } else {
+        hint.textContent = `✅ مجاز (${toFa(maxUnits)} تا ${toFa(maxUnits + 3)})`;
+        hint.style.color = '#10b981';
+    }
+}
+
+// [v3.17.0] رندر پنل اولویت‌بندی دروس انتخابی
+function renderPriorityPanel() {
+    const panel = document.getElementById('course-priority-panel');
+    if (!panel) return;
+    const selected = [];
+    for (const id of selectedCourses) {
+        const course = allCourses.find(c => (c.id || c.unique_code) == id);
+        if (course) selected.push({ id, course });
+    }
+    if (selected.length === 0) {
+        panel.innerHTML = '';
+        return;
+    }
+    // مرتب‌سازی بر اساس اولویت فعلی
+    selected.sort((a, b) => (coursePriorities[a.id] || 999) - (coursePriorities[b.id] || 999));
+    let html = `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:8px;">🔢 اولویت‌بندی دروس انتخابی</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">`;
+    selected.forEach(({ id, course }) => {
+        const name = course.title || course.course_name || '';
+        const pr = coursePriorities[id] || 1;
+        html += `<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;">
+            <input type="number" min="1" value="${pr}" data-pid="${id}" style="width:48px;padding:4px;border:1px solid #cbd5e1;border-radius:6px;text-align:center;font-weight:700;color:#6366f1;font-family:inherit;" onchange="setCoursePriority(${id}, this.value)" oninput="this.value=this.value.replace(/[^\d]/g,'')">
+            <span style="font-size:12px;color:#1e293b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name}</span>
+        </div>`;
+    });
+    html += `</div><div style="font-size:11px;color:#64748b;margin-top:8px;">اولویت ۱ = بالاترین ترجیح. مقدار پیش‌فرض بر اساس ترتیب انتخاب است؛ قابل ویرایش.</div></div>`;
+    panel.innerHTML = html;
+}
+
+// [v3.17.0] تنظیم اولویت یک درس از پنل (ویرایش دستی کاربر)
+function setCoursePriority(id, val) {
+    const n = parseInt(val);
+    if (!n || n < 1) { coursePriorities[id] = 1; }
+    else { coursePriorities[id] = n; }
+    renderPriorityPanel();
+}
+
 async function submitCoursePicker() {
     const adminObj = {{ admin | tojson }};
     const instructorName = adminObj.full_name || adminObj.username;
@@ -838,6 +964,7 @@ async function submitCoursePicker() {
     const currentKeys = new Set();
     const itemsToAdd = [];
     const idsToDelete = [];
+    const priorityUpdates = [];  // [v3.17.0] دروس بدون تغییر که اولویتشان عوض شده → PUT
     const addedNames = [];
     const deletedNames = [];
     const unchangedNames = [];
@@ -850,6 +977,7 @@ async function submitCoursePicker() {
         if (!nkey) continue;
         currentKeys.add(nkey);
         const name = course.title || course.course_name || '';
+        const pr = coursePriorities[id] || 1;
         if (!existingCodes.has(nkey)) {
             // درس جدید — ثبت شود (کد اصلی برای ذخیره؛ API خودش نرمال می‌کند)
             itemsToAdd.push({
@@ -862,10 +990,49 @@ async function submitCoursePicker() {
                 cooperation_type: '',
                 status: 'pending',
                 term_code: '',
+                priority: pr,  // [v3.17.0] اولویت
             });
             addedNames.push(name);
         } else {
             unchangedNames.push(name);  // قبلاً ثبت شده — بدون تغییر
+            // [v3.17.0] اگر اولویت تغییر کرده → PUT برای به‌روزرسانی اولویت
+            const oldPr = existingPrefPriority[nkey];
+            if (oldPr !== null && oldPr !== undefined && oldPr !== pr) {
+                priorityUpdates.push({
+                    id: existingPrefMap[nkey],
+                    body: {
+                        unique_course_code: rawCode,
+                        course_name: name,
+                        instructor_code: instructorCode,
+                        instructor_name: instructorName,
+                        instructor_username: instructorUsername,
+                        expert_group: course.course_group || course.group || '',
+                        cooperation_type: '',
+                        status: 'pending',
+                        term_code: '',
+                        priority: pr,
+                    },
+                    name,
+                });
+            } else if (oldPr === null || oldPr === undefined) {
+                // اولویت قبلاً تنظیم نشده (۹۹۹) → هم‌اکنون تنظیم کن
+                priorityUpdates.push({
+                    id: existingPrefMap[nkey],
+                    body: {
+                        unique_course_code: rawCode,
+                        course_name: name,
+                        instructor_code: instructorCode,
+                        instructor_name: instructorName,
+                        instructor_username: instructorUsername,
+                        expert_group: course.course_group || course.group || '',
+                        cooperation_type: '',
+                        status: 'pending',
+                        term_code: '',
+                        priority: pr,
+                    },
+                    name,
+                });
+            }
         }
     }
     // دروس قبلی که الان تیک ندارند → حذف از جدول
@@ -877,8 +1044,24 @@ async function submitCoursePicker() {
         }
     }
 
-    // اگر هیچ تغییری نیست
-    if (itemsToAdd.length === 0 && idsToDelete.length === 0) {
+    // [v3.17.0] اعتبارسنجی «تعداد واحد مطلوب برای تدریس» (کف ≤ desired ≤ کف+۳)
+    let desiredUnitsVal = null;
+    const dcInput = document.getElementById('desired-units-input');
+    if (dcInput && maxUnits > 0) {
+        const dcRaw = String(dcInput.value).replace(/[^\d]/g, '');
+        if (dcRaw === '') {
+            alert(`⚠️ لطفاً «تعداد واحد مطلوب برای تدریس» را وارد کنید.\nمحدوده مجاز: ${toFa(maxUnits)} تا ${toFa(maxUnits + 3)} واحد (کف تا کف+۳).`);
+            return;
+        }
+        desiredUnitsVal = parseInt(dcRaw);
+        if (desiredUnitsVal < maxUnits || desiredUnitsVal > maxUnits + 3) {
+            alert(`⚠️ تعداد واحد مطلوب برای تدریس (${toFa(desiredUnitsVal)}) باید بین کف (${toFa(maxUnits)}) و سقف (${toFa(maxUnits + 3)}) واحد باشد.`);
+            return;
+        }
+    }
+
+    // اگر هیچ تغییری نیست (افزودن/حذف/تغییر اولویت/تغییر واحد مطلوب)
+    if (itemsToAdd.length === 0 && idsToDelete.length === 0 && priorityUpdates.length === 0 && desiredUnitsVal === null) {
         alert('هیچ تغییری برای ذخیره وجود ندارد.');
         return;
     }
@@ -909,6 +1092,12 @@ async function submitCoursePicker() {
     }
     if (maxUnits > 0) {
         confirmMsg += `\n📊 مجموع واحدها: ${toFa(totalCredits)} (کف: ${toFa(maxUnits)} / سقف: ${toFa(ceiling)}) — کارورزی/پروژه مستثنی`;
+        if (desiredUnitsVal !== null) {
+            confirmMsg += `\n🎯 تعداد واحد مطلوب برای تدریس: ${toFa(desiredUnitsVal)} واحد`;
+        }
+    }
+    if (priorityUpdates.length > 0) {
+        confirmMsg += `\n🔢 به‌روزرسانی اولویت ${toFa(priorityUpdates.length)} درس`;
     }
     confirmMsg += `\n\n⚠️ دروس تکراری به‌صورت خودکار نادیده گرفته می‌شوند.`;
 
@@ -930,13 +1119,13 @@ async function submitCoursePicker() {
             const r = await fetch('/api/teaching-preferences/bulk', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({items: itemsToAdd}),
+                body: JSON.stringify({items: itemsToAdd, desired_credits: desiredUnitsVal}),
             });
             const res = await r.json();
             if (!res.ok) {
                 // سرور ثبت را رد کرد (کف/سقف یا دوره فعال) — نباید پیغام موفقیت نشان دهیم
                 alert('⚠️ ثبت دروس مطلوب انجام نشد:\n' + (res.error || 'خطای ناشناخته'));
-                location.reload();
+                reloadOnTab('teaching');
                 return;
             }
             addedCount = res.count || 0;
@@ -944,6 +1133,32 @@ async function submitCoursePicker() {
                 // فقط خطاهای واقعی (نه تکراری) را نشان بده
                 alert('⚠️ برخی دروس با خطا مواجه شدند:\n' + res.errors.join('\n'));
             }
+        }
+        // [v3.17.0] به‌روزرسانی اولویت دروس بدون تغییری که اولویتشان عوض شده
+        let priorityUpdatedCount = 0;
+        for (const pu of priorityUpdates) {
+            try {
+                const pr = await fetch('/api/teaching-preferences/' + pu.id, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(pu.body),
+                });
+                if (pr.ok) priorityUpdatedCount++;
+            } catch (e) {}
+        }
+        // [v3.17.0] همگام‌سازی «تعداد واحد مطلوب برای تدریس» روی همه ردیف‌های استاد
+        // (endpoint اختصاصی — هم برای حالت فقط-تغییر-وحد و هم برای اطمینان از یکپارچگی)
+        let desiredSaved = false;
+        if (desiredUnitsVal !== null) {
+            try {
+                const dr = await fetch('/api/teaching-preferences/desired-units', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({instructor_code: instructorCode, desired_credits: desiredUnitsVal}),
+                });
+                const dres = await dr.json();
+                desiredSaved = !!dres.ok;
+            } catch (e) {}
         }
         let msg = '✅ ذخیره شد.\n\n';
         if (addedNames.length > 0) {
@@ -957,12 +1172,18 @@ async function submitCoursePicker() {
         if (unchangedNames.length > 0) {
             msg += `✅ بدون تغییر ماند (${toFa(unchangedNames.length)}): ${unchangedNames.join('، ')}\n`;
         }
-        if (addedNames.length === 0 && deletedNames.length === 0) {
+        if (priorityUpdatedCount > 0) {
+            msg += `🔢 اولویت ${toFa(priorityUpdatedCount)} درس به‌روز شد.\n`;
+        }
+        if (desiredSaved) {
+            msg += `🎯 تعداد واحد مطلوب برای تدریس: ${toFa(desiredUnitsVal)} واحد ذخیره شد.\n`;
+        }
+        if (addedNames.length === 0 && deletedNames.length === 0 && priorityUpdatedCount === 0 && !desiredSaved) {
             msg = '✅ ذخیره شد — هیچ تغییری اعمال نشد.';
         }
         alert(msg);
         closeCoursePicker();
-        location.reload();
+        reloadOnTab('teaching');
     } catch (e) {
         alert('خطا: ' + e.message);
     }
@@ -1143,9 +1364,10 @@ async function submitTimePicker() {
     if (!confirm('آیا از ذخیره مطلوبیت‌های زمان مطمئن هستید؟\n\n➕ نوبت‌های جدید: ' + toFa(itemsToAdd.length) + '\n🗑️ نوبت‌های حذف‌شده: ' + toFa(idsToDelete.length))) return;
 
     try {
-        // ابتدا حذف نوبت‌های برداشته‌شده
+        // ابتدا حذف نوبت‌های برداشته‌شده (?sync=1: معاف از کنترل کف زیر-۴ چون
+        // وضعیت نهایی در bulk اعتبارسنجی می‌شود)
         for (const pid of idsToDelete) {
-            try { await fetch('/api/time-preferences/' + pid, {method:'DELETE'}); } catch(e){}
+            try { await fetch('/api/time-preferences/' + pid + '?sync=1', {method:'DELETE'}); } catch(e){}
         }
         // سپس ثبت نوبت‌های جدید
         let addedCount = 0;
@@ -1158,7 +1380,7 @@ async function submitTimePicker() {
             const res = await r.json();
             if (!res.ok) {
                 alert('⚠️ ثبت مطلوبیت‌های زمان انجام نشد:\n' + (res.error || 'خطای ناشناخته'));
-                location.reload();
+                reloadOnTab('time');
                 return;
             }
             addedCount = res.count || 0;
@@ -1169,7 +1391,7 @@ async function submitTimePicker() {
         if (addedCount === 0 && idsToDelete.length === 0) msg = '✅ ذخیره شد — هیچ تغییری اعمال نشد.';
         alert(msg);
         closeTimePicker();
-        location.reload();
+        reloadOnTab('time');
     } catch (e) {
         alert('خطا: ' + e.message);
     }
@@ -1187,7 +1409,7 @@ async function editTeaching(id) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({status: newStatus, course_name: item.course_name, instructor_name: item.instructor_name, unique_course_code: item.unique_course_code, expert_group: item.expert_group, cooperation_type: item.cooperation_type, term_code: item.term_code})
     });
-    if ((await r.json()).ok) location.reload();
+    if ((await r.json()).ok) reloadOnTab('teaching');
 }
 
 async function deleteTeaching(id) {
@@ -1205,7 +1427,7 @@ async function deleteTeaching(id) {
         const r = await fetch(`/api/teaching-preferences/${id}`, {method:'DELETE'});
         const res = await r.json();
         if (res.ok) {
-            location.reload();
+            reloadOnTab('teaching');
         } else {
             alert(res.error || 'خطا در حذف.');
         }
@@ -1221,12 +1443,22 @@ async function editTime(id) {
 
 async function deleteTime(id) {
     if (!ensureSubmissionOpen()) return;
+    // [v3.17.0] کنترل کف تعداد نوبت (همان کنترل مودال): حذف مستقیم از جدول نباید
+    // تعداد نوبت‌های استاد (با سقف واحد بالای ۱۱) را به زیر ۴ برساند — تا دور
+    // زدن کنترل مودال از طریق جدول ممکن نباشد.
+    if (MAX_UNITS_FLOOR > 11) {
+        const cnt = document.querySelectorAll('#tab-time tbody tr[data-search]').length;
+        if (cnt - 1 < 4) {
+            alert(`⛔ حذف این نوبت زمانی ممکن نیست.\n\nتعداد نوبت‌های شما پس از حذف (${toFa(cnt - 1)}) کمتر از حداقل مجاز (۴ نوبت) می‌شود.\nسقف واحدهای شما ${toFa(MAX_UNITS_FLOOR)} واحد است؛ اساتیدی که سقف واحدشان بالای ۱۱ است باید حداقل ۴ نوبت زمانی داشته باشند.\n\nبرای تغییر، از فرم «📅 انتخاب زمان‌های مطلوب» استفاده کنید.`);
+            return;
+        }
+    }
     if (!confirm('آیا از حذف این زمان مطلوب مطمئن هستید؟')) return;
     try {
         const r = await fetch(`/api/time-preferences/${id}`, {method:'DELETE'});
         const res = await r.json();
         if (res.ok) {
-            location.reload();
+            reloadOnTab('time');
         } else {
             alert('خطا در حذف: ' + (res.error || 'نامشخص'));
         }
@@ -1243,7 +1475,7 @@ async function uploadTeachingExcel(input) {
     const r = await fetch('/api/teaching-preferences/upload', {method:'POST', body: fd});
     const res = await r.json();
     alert(res.message || res.error || '');
-    if (res.ok || res.count > 0) location.reload();
+    if (res.ok || res.count > 0) reloadOnTab('teaching');
     input.value = '';
 }
 async function uploadTimeExcel(input) {
@@ -1254,7 +1486,7 @@ async function uploadTimeExcel(input) {
     const r = await fetch('/api/time-preferences/upload?term=mehr', {method:'POST', body: fd});
     const res = await r.json();
     alert(res.message || res.error || '');
-    if (res.ok || res.count > 0) location.reload();
+    if (res.ok || res.count > 0) reloadOnTab('time');
     input.value = '';
 }
 </script>
