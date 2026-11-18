@@ -38,7 +38,41 @@ COOPERATION_TYPES = [
     "دستیارآموزشی",
     "هیات علمی وابسته",
     "حق التدریس",
+    "هیات علمی مامور",
 ]
+
+# [v3.18.0] قواعد کف/سقف/واحد موردنظر بر اساس نوع همکاری (مطابق درخواست کاربر)
+# min = حداقل واحد (کف)، max = حداکثر واحد (سقف)، desired = تعداد واحد مورد نظر
+COOPERATION_UNITS_RULES = {
+    "هیات علمی":         {"min": 3,  "max": 6,  "desired": 6},
+    "هیات علمی وابسته":  {"min": 16, "max": 19, "desired": 19},
+    "دستیارآموزشی":      {"min": 6,  "max": 12, "desired": 12},
+    "حق التدریس":        {"min": 6,  "max": 16, "desired": 16},
+    "هیات علمی مامور":   {"min": 16, "max": 19, "desired": 19},
+}
+
+def _norm_coop_key(cooperation_type):
+    """نرمال‌سازی نوع همکاری برای تطبیق با کلید قواعد (مقاوم در برابر تفاوت املایی:
+    هیئت↔هیات، دستیار آموزشی↔دستیارآموزشی، فاصله/ZWNJ)."""
+    if not cooperation_type:
+        return ""
+    s = str(cooperation_type).strip()
+    s = s.replace("\u200c", "")          # حذف نیم‌فاصله
+    s = s.replace("هیئت", "هیات")         # یکسان‌سازی هیئت → هیات
+    s = s.replace("دستیار آموزشی", "دستیارآموزشی")  # با فاصله → بدون فاصله
+    s = s.replace(" ", "")                # حذف فاصله‌های باقی‌مانده
+    return s
+
+def get_units_rule(cooperation_type):
+    """برگرداندن {min,max,desired} بر اساس نوع همکاری، یا None اگر نامشخص."""
+    key = _norm_coop_key(cooperation_type)
+    if not key:
+        return None
+    # تطبیق با کلیدهای فشرده‌شده‌ی قواعد
+    for k, v in COOPERATION_UNITS_RULES.items():
+        if _norm_coop_key(k) == key:
+            return dict(v)
+    return None
 
 # ==================================================
 # Migration: ساخت جدول instructors
@@ -64,6 +98,8 @@ def ensure_instructors_table(db):
                 "group" TEXT,
                 cooperation_type TEXT,
                 max_teaching_units INTEGER DEFAULT 0,
+                min_units INTEGER DEFAULT 0,
+                desired_units INTEGER DEFAULT 0,
                 role TEXT DEFAULT 'instructor',
                 is_active INTEGER DEFAULT 1,
                 password_hash TEXT,
@@ -83,6 +119,8 @@ def ensure_instructors_table(db):
             ("email", "TEXT"),
             ('"group"', "TEXT"),
             ("max_teaching_units", "INTEGER DEFAULT 0"),
+            ("min_units", "INTEGER DEFAULT 0"),
+            ("desired_units", "INTEGER DEFAULT 0"),
             ("role", "TEXT DEFAULT 'instructor'"),
             ("is_active", "INTEGER DEFAULT 1"),
             ("password_hash", "TEXT"),
@@ -167,6 +205,27 @@ def ensure_instructors_table(db):
             cursor.execute("UPDATE authorized_users SET user_type = 'admin' WHERE role = 'admin' AND (user_type IS NULL OR user_type = '' OR user_type = 'student')")
         except Exception:
             pass
+
+        # [v3.18.0] بک‌فیل یک‌باره‌ی کف/سقف/واحد موردنظر بر اساس نوع همکاری.
+        # فقط زمانی اجرا می‌شود که هنوز هیچ استادی min_units نداشته باشد (یک‌بار).
+        # پس از آن، ویرایش‌های دستی محترم شمرده می‌شوند.
+        try:
+            cnt_min = cursor.execute("SELECT COUNT(*) FROM instructors WHERE min_units > 0").fetchone()
+            cnt_min = cnt_min[0] if cnt_min else 0
+            if cnt_min == 0:
+                rows = cursor.execute("SELECT id, cooperation_type FROM instructors").fetchall()
+                for r in rows:
+                    rid = r[0]
+                    ct = r[1] if len(r) > 1 else ""
+                    rule = get_units_rule(ct)
+                    if rule:
+                        cursor.execute(
+                            "UPDATE instructors SET min_units = ?, max_teaching_units = ?, desired_units = ? WHERE id = ?",
+                            (rule["min"], rule["max"], rule["desired"], rid),
+                        )
+                logger.info("✓ instructors units backfilled by cooperation type")
+        except Exception as e:
+            logger.warning(f"instructors units backfill skipped: {e}")
 
         conn.commit()
         logger.info("✓ instructors table ensured (with column migrations + user_type defaults)")
@@ -254,12 +313,26 @@ def create_instructor(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional
     if not full_name:
         full_name = data.get("name", "").strip()
 
+    # [v3.18.0] کف/سقف/واحد موردنظر — اگر صریح داده نشده، از نوع همکاری استخراج کن
+    coop = data.get("cooperation_type", "")
+    rule = get_units_rule(coop)
+    max_units = int(data.get("max_teaching_units") or 0)
+    min_units = int(data.get("min_units") or 0)
+    desired_units = int(data.get("desired_units") or 0)
+    if rule:
+        if max_units <= 0:
+            max_units = rule["max"]
+        if min_units <= 0:
+            min_units = rule["min"]
+        if desired_units <= 0:
+            desired_units = rule["desired"]
+
     query = '''
         INSERT INTO instructors
             (row_number, code, username, full_name, phone, email,
-             "group", cooperation_type, max_teaching_units, role, is_active,
-             password_hash, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             "group", cooperation_type, max_teaching_units, min_units, desired_units,
+             role, is_active, password_hash, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     '''
     params = (
         int(data.get("row_number") or 0),
@@ -270,7 +343,9 @@ def create_instructor(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional
         data.get("email", ""),
         data.get("group", "") or data.get("expert_group", ""),
         data.get("cooperation_type", ""),
-        int(data.get("max_teaching_units") or 0),
+        max_units,
+        min_units,
+        desired_units,
         data.get("role", "instructor"),
         1 if data.get("is_active", True) else 0,
         password_hash,
@@ -302,11 +377,26 @@ def update_instructor(db, instructor_id: int, data: Dict[str, Any]) -> Tuple[boo
     if not full_name:
         full_name = data.get("name", "").strip()
 
+    # [v3.18.0] کف/سقف/واحد موردنظر — اگر صریح داده نشده، از نوع همکاری استخراج کن
+    coop = data.get("cooperation_type", "")
+    rule = get_units_rule(coop)
+    max_units = int(data.get("max_teaching_units") or 0)
+    min_units = int(data.get("min_units") or 0)
+    desired_units = int(data.get("desired_units") or 0)
+    if rule:
+        if max_units <= 0:
+            max_units = rule["max"]
+        if min_units <= 0:
+            min_units = rule["min"]
+        if desired_units <= 0:
+            desired_units = rule["desired"]
+
     query = f'''
         UPDATE instructors SET
             row_number = ?, code = ?, username = ?, full_name = ?,
             phone = ?, email = ?, "group" = ?, cooperation_type = ?,
-            max_teaching_units = ?, role = ?, is_active = ?,
+            max_teaching_units = ?, min_units = ?, desired_units = ?,
+            role = ?, is_active = ?,
             updated_at = CURRENT_TIMESTAMP
             {password_hash_clause}
         WHERE id = ?
@@ -320,7 +410,9 @@ def update_instructor(db, instructor_id: int, data: Dict[str, Any]) -> Tuple[boo
         data.get("email", ""),
         data.get("group", ""),
         data.get("cooperation_type", ""),
-        int(data.get("max_teaching_units") or 0),
+        max_units,
+        min_units,
+        desired_units,
         data.get("role", "instructor"),
         1 if data.get("is_active", True) else 0,
     ] + extra_params + [instructor_id]
@@ -459,6 +551,8 @@ def sync_instructors_from_remote(db, settings: Dict[str, Any] = None) -> Dict[st
                 "group": item.get("group") or item.get("expert_group", ""),
                 "cooperation_type": item.get("cooperation_type") or "",
                 "max_teaching_units": int(item.get("max_teaching_units") or 0),
+                "min_units": int(item.get("min_units") or 0),
+                "desired_units": int(item.get("desired_units") or 0),
                 "is_active": True,
                 "source": "remote",
             }
@@ -526,6 +620,10 @@ EXCEL_MAP = {
     "نوع همکاری": "cooperation_type",
     "حداکثر واحد": "max_teaching_units",
     "حداکثر واحد تدریس": "max_teaching_units",
+    "حداقل واحد": "min_units",
+    "حداقل واحد تدریس": "min_units",
+    "تعداد واحد مورد نظر": "desired_units",
+    "واحد مورد نظر": "desired_units",
     "نقش": "role",
     "وضعیت": "is_active",
 }
@@ -561,7 +659,7 @@ def import_instructors_excel(db, file_path: str) -> Dict[str, Any]:
                     val = None
                 else:
                     val = str(val).strip()
-                    if en_name in ("row_number", "max_teaching_units") and val and val.replace(".", "").isdigit():
+                    if en_name in ("row_number", "max_teaching_units", "min_units", "desired_units") and val and val.replace(".", "").isdigit():
                         try:
                             val = int(float(val))
                         except Exception:

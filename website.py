@@ -1366,19 +1366,26 @@ def api_teaching_preferences_delete(pref_id):
     pref = prefs_module.get_teaching_preference_by_id(db, pref_id)
     if not pref:
         return jsonify({"ok": False, "error": "رکورد پیدا نشد"}), 404
-    # کنترل کف واحد: حذف نباید مجموع را کمتر از کف کند.
-    # فقط برای حذف مستقیم از جدول (deleteTeaching). حذف‌های همگام‌سازی مودال
+    # [v3.18.0] کنترل کف واحد: حذف نباید مجموع را کمتر از کف (min_units) کند.
+    # فقط برای حذف مستقیم از جدول (deleteTeaching). حذف‌های همگان‌سازی مودال
     # (?sync=1) معافند چون کف روی «وضعیت نهایی» در bulk اعمال می‌شود.
     if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE and request.args.get("sync") != "1":
         inst_code = pref.get("instructor_code") or pref.get("instructor_username") or ""
-        max_units = 0
-        inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (inst_code, inst_code))
+        min_units = 0
+        inst_rows = db.execute_query("SELECT min_units, cooperation_type FROM instructors WHERE username = ? OR code = ?", (inst_code, inst_code))
         if inst_rows:
-            max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
-        if max_units > 0:
+            ir = inst_rows[0]
+            ir = ir if isinstance(ir, dict) else dict(zip(["min_units", "cooperation_type"], ir))
+            min_units = ir.get("min_units") or 0
+            # اگر کف ست نشده، از نوع همکاری استخراج کن
+            if min_units <= 0 and ir.get("cooperation_type"):
+                rule = instructors_module.get_units_rule(ir.get("cooperation_type"))
+                if rule:
+                    min_units = rule["min"]
+        if min_units > 0:
             total_after = prefs_module.get_instructor_total_credits(db, inst_code, exclude_pref_id=pref_id)
-            if total_after < max_units:
-                return jsonify({"ok": False, "error": f"حذف این درس ممکن نیست: مجموع واحدهای شما پس از حذف ({total_after} واحد) کمتر از کف مجاز ({max_units} واحد) می‌شود. برای حذف، ابتدا از طریق فرم «📚 انتخاب درس‌های مطلوب» یک درس جایگزین ثبت کنید."}), 400
+            if total_after < min_units:
+                return jsonify({"ok": False, "error": f"حذف این درس ممکن نیست: مجموع واحدهای شما پس از حذف ({total_after} واحد) کمتر از کف مجاز ({min_units} واحد) می‌شود. برای حذف، ابتدا از طریق فرم «📚 انتخاب درس‌های مطلوب» یک درس جایگزین ثبت کنید."}), 400
     ok, err = prefs_module.delete_teaching_preference(db, pref_id)
     if err:
         if "پیدا نشد" in err:
@@ -1402,32 +1409,57 @@ def api_teaching_preferences_bulk():
     # کنترل بازه فعال بودن دوره (فقط برای اساتید)
     if _pref_submission_closed_for_instructor():
         return jsonify({"ok": False, "error": "در حال حاضر دوره فعالی برای ثبت مطلوبیت وجود ندارد."}), 403
-    # تعیین استاد و کف/سقف واحد (هم برای کنترل کف/سقف و هم برای desired_credits)
+    # [v3.18.0] تعیین استاد، کف/سقف واحد، نوع همکاری و ترم
+    # (max_units = سقف، min_units = کف — از جدول instructors یا قواعد نوع همکاری)
     inst_code_raw = items[0].get("instructor_code") or items[0].get("instructor_username") or g.admin.get("username", "")
     inst_code = prefs_module.normalize_instructor_code(inst_code_raw)
-    max_units = 0
-    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE:
-        inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (inst_code_raw, inst_code_raw))
+    max_units = 0       # سقف (حداکثر واحد)
+    min_units = 0       # کف (حداقل واحد)
+    inst_cooperation_type = ""
+    if INSTRUCTORS_AVAILABLE:
+        inst_rows = db.execute_query(
+            "SELECT max_teaching_units, min_units, cooperation_type FROM instructors WHERE username = ? OR code = ?",
+            (inst_code_raw, inst_code_raw))
         if inst_rows:
-            max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
+            ir = inst_rows[0]
+            ir = ir if isinstance(ir, dict) else dict(zip(["max_teaching_units", "min_units", "cooperation_type"], ir))
+            max_units = ir.get("max_teaching_units") or 0
+            min_units = ir.get("min_units") or 0
+            inst_cooperation_type = ir.get("cooperation_type") or ""
+        # اگر کف/سقف ست نشده، از نوع همکاری استخراج کن
+        if (min_units <= 0 or max_units <= 0) and inst_cooperation_type:
+            rule = instructors_module.get_units_rule(inst_cooperation_type)
+            if rule:
+                if min_units <= 0:
+                    min_units = rule["min"]
+                if max_units <= 0:
+                    max_units = rule["max"]
+
+    # [v3.18.0] پر کردن cooperation_type و term_code روی آیتم‌ها (اگر خالی باشند)
+    active_period_for_term = prefs_module.get_active_preference_period(db)
+    default_term = (active_period_for_term.get("semester") if active_period_for_term else None) or "mehr"
+    for item in items:
+        if not item.get("cooperation_type"):
+            item["cooperation_type"] = inst_cooperation_type
+        if not item.get("term_code"):
+            item["term_code"] = default_term
 
     # [v3.17.0] تعداد واحد مطلوب برای تدریس (desired_credits): یک عدد برای کل مطلوبیت.
-    # اعتبارسنجی: کف ≤ desired ≤ کف+۳ (فقط برای اساتید با کف>۰).
+    # اعتبارسنجی: کف ≤ desired ≤ سقف (فقط برای اساتید با کف>۰).
     desired_credits = data.get("desired_credits")
-    if g.admin.get("role") == "instructor" and max_units > 0 and desired_credits is not None and str(desired_credits).strip() != "":
+    if g.admin.get("role") == "instructor" and min_units > 0 and desired_credits is not None and str(desired_credits).strip() != "":
         try:
             dc_val = int(desired_credits)
         except (ValueError, TypeError):
             return jsonify({"ok": False, "error": "تعداد واحد مطلوب برای تدریس باید یک عدد صحیح باشد."}), 400
-        ceiling_dc = max_units + 3
-        if dc_val < max_units or dc_val > ceiling_dc:
-            return jsonify({"ok": False, "error": f"تعداد واحد مطلوب برای تدریس ({dc_val}) باید بین کف ({max_units}) و سقف ({ceiling_dc}) واحد باشد."}), 400
+        if max_units > 0 and (dc_val < min_units or dc_val > max_units):
+            return jsonify({"ok": False, "error": f"تعداد واحد مطلوب برای تدریس ({dc_val}) باید بین کف ({min_units}) و سقف ({max_units}) واحد باشد."}), 400
         # یک مقدار یکسان روی همه آیتم‌ها (کل مطلوبیت تدریس استاد)
         for item in items:
             item["desired_credits"] = dc_val
 
     # کنترل کف/سقف واحد برای اساتید (پیش‌بررسی قبل از ثبت)
-    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE and max_units > 0:
+    if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE and min_units > 0:
         credits_map = prefs_module.get_credits_map(db)
         # فقط در صورت وجود داده واحد اعمال کف/سقف کن؛ وگرنه رد اشتباه نکن.
         if credits_map:
@@ -1444,11 +1476,11 @@ def api_teaching_preferences_bulk():
                     continue  # تکراری → واحد اضافه نمی‌کند
                 added += credits_map.get(code, 0)
             final_total = current_total + added
-            ceiling = max_units + 3
-            if final_total > ceiling:
-                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) بیشتر از سقف مجاز ({ceiling} واحد) است. کف: {max_units} / سقف: {ceiling} واحد (کارورزی/پروژه مستثنی)."}), 400
-            if final_total < max_units:
-                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) کمتر از کف مجاز ({max_units} واحد) است. حداقل {max_units} واحد باید انتخاب کنید (کارورزی/پروژه مستثنی)."}), 400
+            ceiling = max_units
+            if max_units > 0 and final_total > ceiling:
+                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) بیشتر از سقف مجاز ({ceiling} واحد) است. کف: {min_units} / سقف: {ceiling} واحد (کارورزی/پروژه مستثنی)."}), 400
+            if final_total < min_units:
+                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) کمتر از کف مجاز ({min_units} واحد) است. حداقل {min_units} واحد باید انتخاب کنید (کارورزی/پروژه مستثنی)."}), 400
     created_ids = []
     errors = []
     skipped_duplicates = 0
@@ -1491,20 +1523,32 @@ def api_teaching_preferences_desired_units():
     instructor_code = (data.get("instructor_code") or data.get("instructor_username")
                        or (g.admin.get("username") if g.admin else ""))
     desired_credits = data.get("desired_credits")
-    # اعتبارسنجی بازه (کف..کف+۳) برای اساتید
+    # [v3.18.0] اعتبارسنجی بازه (کف..سقف) برای اساتید — min_units ≤ desired ≤ max_units
     if g.admin.get("role") == "instructor" and INSTRUCTORS_AVAILABLE and desired_credits is not None and str(desired_credits).strip() != "":
-        inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (instructor_code, instructor_code))
+        inst_rows = db.execute_query("SELECT min_units, max_teaching_units, cooperation_type FROM instructors WHERE username = ? OR code = ?", (instructor_code, instructor_code))
+        min_units = 0
         max_units = 0
         if inst_rows:
-            max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
-        if max_units > 0:
+            ir = inst_rows[0]
+            ir = ir if isinstance(ir, dict) else dict(zip(["min_units", "max_teaching_units", "cooperation_type"], ir))
+            min_units = ir.get("min_units") or 0
+            max_units = ir.get("max_teaching_units") or 0
+            coop = ir.get("cooperation_type") or ""
+            if (min_units <= 0 or max_units <= 0) and coop:
+                rule = instructors_module.get_units_rule(coop)
+                if rule:
+                    if min_units <= 0:
+                        min_units = rule["min"]
+                    if max_units <= 0:
+                        max_units = rule["max"]
+        if min_units > 0:
             try:
                 dc_val = int(desired_credits)
             except (ValueError, TypeError):
                 return jsonify({"ok": False, "error": "تعداد واحد مطلوب باید عدد صحیح باشد."}), 400
-            ceiling = max_units + 3
-            if dc_val < max_units or dc_val > ceiling:
-                return jsonify({"ok": False, "error": f"تعداد واحد مطلوب ({dc_val}) باید بین کف ({max_units}) و سقف ({ceiling}) واحد باشد."}), 400
+            if dc_val < min_units or (max_units > 0 and dc_val > max_units):
+                hi = max_units if max_units > 0 else min_units
+                return jsonify({"ok": False, "error": f"تعداد واحد مطلوب ({dc_val}) باید بین کف ({min_units}) و سقف ({hi}) واحد باشد."}), 400
     ok = prefs_module.update_desired_units_for_instructor(db, instructor_code, desired_credits)
     if not ok:
         return jsonify({"ok": False, "error": "ذخیره تعداد واحد مطلوب ناموفق بود."}), 500
@@ -1730,12 +1774,40 @@ def admin_preferences():
                      or p.get("instructor_code") == instructor_username]
         unique_courses = db.execute_query("SELECT unique_code, title FROM unique_courses ORDER BY title") or []
         terms = slot_times_module.get_terms()["terms"]
-        # گرفتن max_teaching_units استاد (کف = max_units، سقف = max_units + ۳)
-        max_units = 0
+        # [v3.18.0] کف/سقف/واحد موردنظر + مشخصات استاد از جدول instructors
+        # (max_teaching_units = سقف، min_units = کف، desired_units = تعداد واحد مورد نظر)
+        max_units = 0       # سقف (حداکثر واحد)
+        min_units = 0       # کف (حداقل واحد)
+        desired_units = 0   # تعداد واحد مورد نظر
+        instructor_cooperation_type = ""
+        instructor_full_name = g.admin.get("full_name", "") or instructor_username
         if INSTRUCTORS_AVAILABLE:
-            inst_rows = db.execute_query("SELECT max_teaching_units FROM instructors WHERE username = ? OR code = ?", (instructor_username, instructor_username))
+            inst_rows = db.execute_query(
+                "SELECT max_teaching_units, min_units, desired_units, cooperation_type, full_name "
+                "FROM instructors WHERE username = ? OR code = ?",
+                (instructor_username, instructor_username))
             if inst_rows:
-                max_units = (inst_rows[0]["max_teaching_units"] if isinstance(inst_rows[0], dict) else inst_rows[0][0]) or 0
+                ir = inst_rows[0]
+                ir = ir if isinstance(ir, dict) else dict(zip(
+                    ["max_teaching_units", "min_units", "desired_units", "cooperation_type", "full_name"], ir))
+                max_units = ir.get("max_teaching_units") or 0
+                min_units = ir.get("min_units") or 0
+                desired_units = ir.get("desired_units") or 0
+                instructor_cooperation_type = ir.get("cooperation_type") or ""
+                if ir.get("full_name"):
+                    instructor_full_name = ir["full_name"]
+        # اگر کف/سقف ست نشده (استاد قدیمی)، از نوع همکاری استخراج کن
+        if (min_units <= 0 or max_units <= 0 or desired_units <= 0) and INSTRUCTORS_AVAILABLE:
+            rule = instructors_module.get_units_rule(instructor_cooperation_type)
+            if rule:
+                if min_units <= 0:
+                    min_units = rule["min"]
+                if max_units <= 0:
+                    max_units = rule["max"]
+                if desired_units <= 0:
+                    desired_units = rule["desired"]
+        # ترم پیش‌فرض برای مطلوبیت‌های تدریس (از دوره فعال یا 'mehr')
+        default_term_code = (active_period.get("semester") if active_period else None) or "mehr"
         return render_template(
             "admin/preferences.html",
             teaching_items=teaching_items,
@@ -1744,7 +1816,13 @@ def admin_preferences():
             terms=terms,
             admin=g.admin,
             is_instructor=True,
+            min_units=min_units,
+            max_units=max_units,
+            desired_units=desired_units,
             max_teaching_units=max_units,
+            instructor_cooperation_type=instructor_cooperation_type,
+            instructor_full_name=instructor_full_name,
+            default_term_code=default_term_code,
             active_period=active_period,
             submission_open=submission_open,
             credits_map=credits_map,

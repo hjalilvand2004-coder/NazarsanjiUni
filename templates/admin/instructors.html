@@ -100,7 +100,9 @@
                 <th>تلفن</th>
                 <th>گروه</th>
                 <th>نوع همکاری</th>
+                <th>حداقل واحد</th>
                 <th>حداکثر واحد</th>
+                <th>تعداد واحد مورد نظر</th>
                 <th>وضعیت</th>
                 <th>منبع</th>
                 <th>عملیات</th>
@@ -120,7 +122,9 @@
                     {% elif item.cooperation_type %}{{ item.cooperation_type }}
                     {% else %}—{% endif %}
                 </td>
+                <td><strong style="color:#0ea5e9;">{{ item.min_units or 0 }}</strong></td>
                 <td>{{ item.max_teaching_units or 0 }}</td>
+                <td><strong style="color:#6366f1;">{{ item.desired_units or 0 }}</strong></td>
                 <td>
                     {% if item.is_active %}<span class="badge badge-success">فعال</span>
                     {% else %}<span class="badge badge-danger">غیرفعال</span>{% endif %}
@@ -137,7 +141,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-3);">
+            <tr><td colspan="13" style="text-align:center;padding:30px;color:var(--text-3);">
                 هیچ استادی ثبت نشده است. برای شروع، می‌توانید از دکمه «افزودن استاد» یا «بارگذاری اکسل» یا «همگام‌سازی» استفاده کنید.
             </td></tr>
             {% endfor %}
@@ -185,18 +189,27 @@
                 </div>
                 <div>
                     <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نوع همکاری</label>
-                    <select id="i-cooperation_type" name="cooperation_type" class="form-select">
+                    <select id="i-cooperation_type" name="cooperation_type" class="form-select" onchange="autoFillUnitsByCoop()">
                         <option value="">انتخاب کنید...</option>
-                        <option value="هیئت علمی">هیئت علمی</option>
+                        <option value="هیات علمی">هیات علمی</option>
                         <option value="دستیارآموزشی">دستیارآموزشی</option>
-                        <option value="هیئت علمی وابسته">هیئت علمی وابسته</option>
+                        <option value="هیات علمی وابسته">هیات علمی وابسته</option>
                         <option value="حق التدریس">حق التدریس</option>
+                        <option value="هیات علمی مامور">هیات علمی مامور</option>
                         <option value="سایر">سایر</option>
                     </select>
                 </div>
                 <div>
-                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">حداکثر واحد تدریس</label>
-                    <input type="number" id="i-max_teaching_units" name="max_teaching_units" class="form-input" placeholder="12" min="0" dir="ltr">
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">حداقل واحد (کف)</label>
+                    <input type="number" id="i-min_units" name="min_units" class="form-input" placeholder="۳" min="0" dir="ltr">
+                </div>
+                <div>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">حداکثر واحد (سقف)</label>
+                    <input type="number" id="i-max_teaching_units" name="max_teaching_units" class="form-input" placeholder="۱۲" min="0" dir="ltr">
+                </div>
+                <div>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">تعداد واحد مورد نظر</label>
+                    <input type="number" id="i-desired_units" name="desired_units" class="form-input" placeholder="۱۲" min="0" dir="ltr">
                 </div>
                 <div>
                     <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">نقش</label>
@@ -307,6 +320,32 @@ function closeInstructorModal() {
     document.getElementById('instructor-modal').style.display = 'none';
 }
 
+// [v3.18.0] قواعد کف/سقف/واحد موردنظر بر اساس نوع همکاری (منطبق با سرور)
+const COOP_UNITS_RULES = {
+    "هیات علمی":         {min: 3,  max: 6,  desired: 6},
+    "هیات علمی وابسته":  {min: 16, max: 19, desired: 19},
+    "دستیارآموزشی":      {min: 6,  max: 12, desired: 12},
+    "حق التدریس":        {min: 6,  max: 16, desired: 16},
+    "هیات علمی مامور":   {min: 16, max: 19, desired: 19},
+};
+// نرمال‌سازی نوع همکاری برای تطبیق با کلید قواعد (هیئت↔هیات، فاصله)
+function _canonicalCoop(v){
+    if(!v) return '';
+    let s = String(v).replace(/\u200c/g,'').replace(/هیئت/g,'هیات').replace(/دستیار آموزشی/g,'دستیارآموزشی').replace(/ /g,'');
+    const map = {'هیاتعلمی':'هیات علمی','دستیارآموزشی':'دستیارآموزشی','هیاتعلمیوابسته':'هیات علمی وابسته','حقالتدریس':'حق التدریس','هیاتعلمیمامور':'هیات علمی مامور'};
+    return map[s] || v;
+}
+// پر کردن خودکار کف/سقف/وحد موردنظر هنگام انتخاب نوع همکاری
+function autoFillUnitsByCoop(){
+    const ct = document.getElementById('i-cooperation_type').value;
+    const rule = COOP_UNITS_RULES[_canonicalCoop(ct)];
+    if(rule){
+        document.getElementById('i-min_units').value = rule.min;
+        document.getElementById('i-max_teaching_units').value = rule.max;
+        document.getElementById('i-desired_units').value = rule.desired;
+    }
+}
+
 function editInstructor(id) {
     fetch('/api/instructors').then(r => r.json()).then(data => {
         const item = data.items.find(i => i.id === id);
@@ -319,8 +358,10 @@ function editInstructor(id) {
         document.getElementById('i-phone').value = item.phone || '';
         document.getElementById('i-email').value = item.email || '';
         document.getElementById('i-group').value = item.group || '';
-        document.getElementById('i-cooperation_type').value = item.cooperation_type || '';
+        document.getElementById('i-cooperation_type').value = _canonicalCoop(item.cooperation_type || '');
+        document.getElementById('i-min_units').value = item.min_units || 0;
         document.getElementById('i-max_teaching_units').value = item.max_teaching_units || 0;
+        document.getElementById('i-desired_units').value = item.desired_units || 0;
         document.getElementById('i-role').value = item.role || 'instructor';
         document.getElementById('i-is_active').checked = item.is_active == 1;
         document.getElementById('i-password').value = '';
@@ -338,6 +379,8 @@ async function submitInstructor(e) {
     const id = data.id;
     delete data.id;
     if (data.max_teaching_units) data.max_teaching_units = parseInt(data.max_teaching_units);
+    if (data.min_units) data.min_units = parseInt(data.min_units);
+    if (data.desired_units) data.desired_units = parseInt(data.desired_units);
     data.is_active = data.is_active === '1' || data.is_active === true;
     if (!data.password) delete data.password;
     const url = id ? `/api/instructors/${id}` : '/api/instructors';

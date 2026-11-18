@@ -300,6 +300,23 @@
     </div>
 </div>
 
+{% if is_instructor %}
+<!-- [v3.18.0] پیغام خوش‌آمدگویی استاد -->
+<div style="background:linear-gradient(135deg,rgba(99,102,241,0.10),rgba(139,92,246,0.06));border:1px solid #e2e8f0;border-radius:14px;padding:14px 20px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;">
+    <div style="font-size:15px;color:#0f172a;font-weight:700;">
+        👋 سلام استاد {{ instructor_full_name }}
+        {% if instructor_cooperation_type %}<span style="color:#6366f1;font-weight:600;"> — نوع همکاری: {{ instructor_cooperation_type }}</span>{% endif %}
+    </div>
+    {% if min_units and min_units > 0 %}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;">
+        <span style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px 10px;">کف: <strong style="color:#0ea5e9;">{{ min_units }}</strong> واحد</span>
+        <span style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px 10px;">سقف: <strong style="color:#ef4444;">{{ max_units }}</strong> واحد</span>
+        <span style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px 10px;">واحد مورد نظر: <strong style="color:#6366f1;">{{ desired_units }}</strong></span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- آمار -->
 <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
     <div class="stat-card">
@@ -468,11 +485,11 @@
                 <div style="font-size:13px;color:#475569;" id="course-count-display">
                     <span id="selected-courses-count">۰</span> درس انتخاب‌شده
                 </div>
-                {% if max_teaching_units and max_teaching_units > 0 %}
+                {% if min_units and min_units > 0 %}
                 <div id="desired-units-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <label for="desired-units-input" style="font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap;">🎯 تعداد واحد مطلوب برای تدریس:</label>
-                    <input type="number" id="desired-units-input" inputmode="numeric" min="{{ max_teaching_units }}" max="{{ max_teaching_units + 3 }}" value="{{ max_teaching_units }}" style="width:84px;padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;font-weight:700;text-align:center;color:#1e293b;font-family:inherit;" oninput="onDesiredUnitsInput(this)">
-                    <span id="desired-units-hint" style="font-size:11px;color:#64748b;white-space:nowrap;">کف {{ max_teaching_units }} تا سقف {{ max_teaching_units + 3 }} واحد</span>
+                    <input type="number" id="desired-units-input" inputmode="numeric" min="{{ min_units }}" max="{{ max_units }}" value="{{ desired_units }}" style="width:84px;padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;font-weight:700;text-align:center;color:#1e293b;font-family:inherit;" oninput="onDesiredUnitsInput(this)">
+                    <span id="desired-units-hint" style="font-size:11px;color:#64748b;white-space:nowrap;">کف {{ min_units }} تا سقف {{ max_units }} واحد</span>
                 </div>
                 {% endif %}
             </div>
@@ -573,8 +590,10 @@ let existingPrefPriority = {};   // normalizeCode -> اولویت ثبت‌شد�
 
 // [v3.15.0] وضعیت مجاز بودن ثبت مطلوبیت (دوره فعال)، کف/سقف واحد و نقشه واحد‌ها
 const SUBMISSION_OPEN = {{ submission_open|default(true)|tojson }};
-const MAX_UNITS_FLOOR = {{ max_teaching_units|default(0) }};   // کف = max_teaching_units استاد
-const CEILING_UNITS = MAX_UNITS_FLOOR + 3;                      // سقف = کف + ۳
+const MAX_UNITS_FLOOR = {{ min_units|default(0) }};     // [v3.18.0] کف = min_units استاد
+const CEILING_UNITS = {{ max_units|default(0) }};       // [v3.18.0] سقف = max_units استاد
+const INSTRUCTOR_COOP = {{ instructor_cooperation_type|default('')|tojson }};   // [v3.18.0] نوع همکاری استاد
+const DEFAULT_TERM_CODE = {{ default_term_code|default('mehr')|tojson }};        // [v3.18.0] ترم پیش‌فرض
 const CREDITS_MAP = {{ credits_map|default({})|tojson }};       // unique_code نرمال‌شده → واحد
 
 function ensureSubmissionOpen() {
@@ -815,9 +834,9 @@ function toggleCourse(id) {
     // بررسی سقف واحدها قبل از اجازه انتخاب
     if (!selectedCourses.has(id)) {
         // درس جدید — بررسی سقف
-        const maxUnits = {{ max_teaching_units|default(0) }};
+        const maxUnits = MAX_UNITS_FLOOR;   // کف
         if (maxUnits > 0) {
-            const ceiling = maxUnits + 3; // سقف = کف + ۳ واحد
+            const ceiling = CEILING_UNITS;  // سقف
             let currentCredits = getTotalCredits();
             const course = allCourses.find(c => (c.id || c.unique_code) == id);
             if (course && !isExcludedFromCredits(course)) {  // کارورزی/پروژه در سقف لحاظ نمی‌شوند
@@ -870,8 +889,8 @@ function getTotalCredits() {
 function updateCourseCount() {
     const count = selectedCourses.size;
     const credits = getTotalCredits();
-    const maxUnits = {{ max_teaching_units|default(0) }};
-    const ceiling = maxUnits + 3;
+    const maxUnits = MAX_UNITS_FLOOR;   // کف
+    const ceiling = CEILING_UNITS;      // سقف
     
     let html = `<span id="selected-courses-count">${toFa(count)}</span> درس انتخاب‌شده`;
     if (maxUnits > 0) {
@@ -887,21 +906,22 @@ function onDesiredUnitsInput(input) {
     // فقط عدد مجاز است (حذف ارقام فارسی/غیرعددی)
     let v = String(input.value).replace(/[^\d]/g, '');
     if (v !== String(input.value)) input.value = v;
-    const maxUnits = {{ max_teaching_units|default(0) }};
+    const maxUnits = MAX_UNITS_FLOOR;   // کف
+    const ceiling = CEILING_UNITS;      // سقف
     const hint = document.getElementById('desired-units-hint');
     if (!hint) return;
     const val = parseInt(v);
     if (v === '') {
-        hint.textContent = `کف ${toFa(maxUnits)} تا سقف ${toFa(maxUnits + 3)} واحد`;
+        hint.textContent = `کف ${toFa(maxUnits)} تا سقف ${toFa(ceiling)} واحد`;
         hint.style.color = '#64748b';
     } else if (val < maxUnits) {
         hint.textContent = `⚠️ کمتر از کف (${toFa(maxUnits)})`;
         hint.style.color = '#ef4444';
-    } else if (val > maxUnits + 3) {
-        hint.textContent = `⚠️ بیشتر از سقف (${toFa(maxUnits + 3)})`;
+    } else if (val > ceiling) {
+        hint.textContent = `⚠️ بیشتر از سقف (${toFa(ceiling)})`;
         hint.style.color = '#ef4444';
     } else {
-        hint.textContent = `✅ مجاز (${toFa(maxUnits)} تا ${toFa(maxUnits + 3)})`;
+        hint.textContent = `✅ مجاز (${toFa(maxUnits)} تا ${toFa(ceiling)})`;
         hint.style.color = '#10b981';
     }
 }
@@ -949,8 +969,8 @@ async function submitCoursePicker() {
     const instructorName = adminObj.full_name || adminObj.username;
     const instructorUsername = adminObj.username;
     const instructorCode = adminObj.username;
-    const maxUnits = {{ max_teaching_units|default(0) }};
-    const ceiling = maxUnits + 3;
+    const maxUnits = MAX_UNITS_FLOOR;   // کف
+    const ceiling = CEILING_UNITS;      // سقف
 
     // اگر هیچ درسی انتخاب نشده ولی دروس قبلی هم وجود ندارد
     if (selectedCourses.size === 0 && Object.keys(existingPrefMap).length === 0) {
@@ -987,9 +1007,9 @@ async function submitCoursePicker() {
                 instructor_name: instructorName,
                 instructor_username: instructorUsername,
                 expert_group: course.course_group || course.group || '',
-                cooperation_type: '',
+                cooperation_type: INSTRUCTOR_COOP,
                 status: 'pending',
-                term_code: '',
+                term_code: DEFAULT_TERM_CODE,
                 priority: pr,  // [v3.17.0] اولویت
             });
             addedNames.push(name);
@@ -1007,9 +1027,9 @@ async function submitCoursePicker() {
                         instructor_name: instructorName,
                         instructor_username: instructorUsername,
                         expert_group: course.course_group || course.group || '',
-                        cooperation_type: '',
+                        cooperation_type: INSTRUCTOR_COOP,
                         status: 'pending',
-                        term_code: '',
+                        term_code: DEFAULT_TERM_CODE,
                         priority: pr,
                     },
                     name,
@@ -1025,9 +1045,9 @@ async function submitCoursePicker() {
                         instructor_name: instructorName,
                         instructor_username: instructorUsername,
                         expert_group: course.course_group || course.group || '',
-                        cooperation_type: '',
+                        cooperation_type: INSTRUCTOR_COOP,
                         status: 'pending',
-                        term_code: '',
+                        term_code: DEFAULT_TERM_CODE,
                         priority: pr,
                     },
                     name,
@@ -1050,12 +1070,12 @@ async function submitCoursePicker() {
     if (dcInput && maxUnits > 0) {
         const dcRaw = String(dcInput.value).replace(/[^\d]/g, '');
         if (dcRaw === '') {
-            alert(`⚠️ لطفاً «تعداد واحد مطلوب برای تدریس» را وارد کنید.\nمحدوده مجاز: ${toFa(maxUnits)} تا ${toFa(maxUnits + 3)} واحد (کف تا کف+۳).`);
+            alert(`⚠️ لطفاً «تعداد واحد مطلوب برای تدریس» را وارد کنید.\nمحدوده مجاز: ${toFa(maxUnits)} تا ${toFa(ceiling)} واحد (کف تا سقف).`);
             return;
         }
         desiredUnitsVal = parseInt(dcRaw);
-        if (desiredUnitsVal < maxUnits || desiredUnitsVal > maxUnits + 3) {
-            alert(`⚠️ تعداد واحد مطلوب برای تدریس (${toFa(desiredUnitsVal)}) باید بین کف (${toFa(maxUnits)}) و سقف (${toFa(maxUnits + 3)}) واحد باشد.`);
+        if (desiredUnitsVal < maxUnits || desiredUnitsVal > ceiling) {
+            alert(`⚠️ تعداد واحد مطلوب برای تدریس (${toFa(desiredUnitsVal)}) باید بین کف (${toFa(maxUnits)}) و سقف (${toFa(ceiling)}) واحد باشد.`);
             return;
         }
     }
@@ -1331,7 +1351,7 @@ async function submitTimePicker() {
         return;
     }
     const admin = {{ admin | tojson }};
-    const maxUnits = {{ max_teaching_units|default(0) }};
+    const maxUnits = CEILING_UNITS;  // سقف واحد استاد (برای آستانه ۱۱)
     // کنترل تعداد نوبت زمانی برای اساتید با سقف واحد بالای ۱۱
     if (maxUnits > 11 && selectedSlots.length < 4) {
         alert('⛔ حداقل ۴ نوبت زمانی باید انتخاب کنید.\n\nسقف واحدهای شما ' + toFa(maxUnits) + ' واحد است؛ اساتیدی که سقف واحدشان بالای ۱۱ واحد است باید حداقل ۴ نوبت زمانی (صبح/ظهر/بعدازظهر در روزهای مختلف) را انتخاب کنند.\n\nشما تا کنون ' + toFa(selectedSlots.length) + ' نوبت انتخاب کرده‌اید.');
@@ -1446,10 +1466,10 @@ async function deleteTime(id) {
     // [v3.17.0] کنترل کف تعداد نوبت (همان کنترل مودال): حذف مستقیم از جدول نباید
     // تعداد نوبت‌های استاد (با سقف واحد بالای ۱۱) را به زیر ۴ برساند — تا دور
     // زدن کنترل مودال از طریق جدول ممکن نباشد.
-    if (MAX_UNITS_FLOOR > 11) {
+    if (CEILING_UNITS > 11) {
         const cnt = document.querySelectorAll('#tab-time tbody tr[data-search]').length;
         if (cnt - 1 < 4) {
-            alert(`⛔ حذف این نوبت زمانی ممکن نیست.\n\nتعداد نوبت‌های شما پس از حذف (${toFa(cnt - 1)}) کمتر از حداقل مجاز (۴ نوبت) می‌شود.\nسقف واحدهای شما ${toFa(MAX_UNITS_FLOOR)} واحد است؛ اساتیدی که سقف واحدشان بالای ۱۱ است باید حداقل ۴ نوبت زمانی داشته باشند.\n\nبرای تغییر، از فرم «📅 انتخاب زمان‌های مطلوب» استفاده کنید.`);
+            alert(`⛔ حذف این نوبت زمانی ممکن نیست.\n\nتعداد نوبت‌های شما پس از حذف (${toFa(cnt - 1)}) کمتر از حداقل مجاز (۴ نوبت) می‌شود.\nسقف واحدهای شما ${toFa(CEILING_UNITS)} واحد است؛ اساتیدی که سقف واحدشان بالای ۱۱ است باید حداقل ۴ نوبت زمانی داشته باشند.\n\nبرای تغییر، از فرم «📅 انتخاب زمان‌های مطلوب» استفاده کنید.`);
             return;
         }
     }

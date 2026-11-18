@@ -176,6 +176,35 @@ def ensure_preferences_tables(db):
         except Exception as _migr_err:
             logger.warning(f"migration desired_credits skipped: {_migr_err}")
 
+        # [v3.18.0] بک‌فیل cooperation_type و term_code برای رکوردهای قدیمیِ خالی.
+        # cooperation_type از جدول instructors (تطبیق با instructor_code) پر می‌شود.
+        # term_code از ترم دوره فعال (یا 'mehr') پر می‌شود.
+        try:
+            # ترم پیش‌فرض: از دوره فعال (کوئری مستقیم برای پرهیز از بازگشت)، وگرنه 'mehr'
+            default_term = "mehr"
+            try:
+                ap_row = cursor.execute("SELECT semester FROM preference_periods WHERE is_active = 1 ORDER BY id DESC LIMIT 1").fetchone()
+                if ap_row and ap_row[0]:
+                    default_term = ap_row[0]
+            except Exception:
+                pass
+            cursor.execute(
+                """UPDATE teaching_preferences SET cooperation_type = (
+                        SELECT i.cooperation_type FROM instructors i
+                        WHERE i.username = teaching_preferences.instructor_code
+                           OR i.code = teaching_preferences.instructor_code
+                        LIMIT 1
+                   )
+                   WHERE (cooperation_type IS NULL OR cooperation_type = '')"""
+            )
+            cursor.execute(
+                "UPDATE teaching_preferences SET term_code = ? "
+                "WHERE (term_code IS NULL OR term_code = '')",
+                (default_term,),
+            )
+        except Exception as _bf_err:
+            logger.warning(f"backfill cooperation_type/term_code skipped: {_bf_err}")
+
         conn.commit()
     logger.info("✓ preferences tables ensured (teaching + time + periods)")
     return True
