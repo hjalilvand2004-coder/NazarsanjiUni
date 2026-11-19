@@ -1897,10 +1897,10 @@ def api_instructors_update(inst_id):
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
     data = request.get_json(silent=True) or {}
     ok, err = instructors_module.update_instructor(db, inst_id, data)
-    if err:
-        if "پیدا نشد" in err:
+    if not ok or err:
+        if err and "پیدا نشد" in err:
             return jsonify({"ok": False, "error": "استاد پیدا نشد"}), 404
-        return jsonify({"ok": False, "error": err}), 500
+        return jsonify({"ok": False, "error": err or "خطای ناشناخته هنگام ویرایش استاد"}), 500
     audit_log("instructor_update", description=f"ویرایش استاد #{inst_id}")
     return jsonify({"ok": True})
 
@@ -2260,9 +2260,15 @@ def admin_instructors():
         return render_template("admin/instructors_unavailable.html", admin=g.admin)
     search = request.args.get("search", "")
     cooperation_type = request.args.get("cooperation_type", "")
-    # [v3.18.3] همگام‌سازی سبک قبل از نمایش، تا کف/سقف/موردنظر و نوع همکاری همیشه
-    # مطابق قواعد باشد (حتی اگر اپ قبل از استقرار نسخه‌ی جدید راه‌اندازی شده باشد).
-    instructors_module.sync_instructors_units(db)
+    # [v3.18.4] قبل از نمایش، schema و داده همگام می‌شود. ensure_instructors_table
+    # شامل مایگریشن ADD COLUMN است → اگر جدول با schema قدیمی (بدون ستون‌های
+    # min_units/max_teaching_units/desired_units) ساخته شده باشد، ستون‌ها در همین
+    # بارگذاری افزوده می‌شوند (بدون نیاز به ری‌استارت) و سپس کف/سقف/موردنظر و
+    # املای نوع همکاری مطابق قواعد اصلاح می‌شوند. کاملاً additive و idempotent.
+    try:
+        instructors_module.ensure_instructors_table(db)
+    except Exception as _e:
+        print(f"⚠️ admin_instructors ensure skipped: {_e}")
     items = instructors_module.get_all_instructors(db, search=search, cooperation_type=cooperation_type)
     sync_settings = instructors_module.load_sync_settings()
     return render_template(

@@ -353,6 +353,39 @@ def save_sync_settings(settings: Dict[str, Any]) -> bool:
 # CRUD: اساتید
 # ==================================================
 
+def _run_mutation_with_selfheal(db, query: str, params) -> Tuple[bool, Optional[str]]:
+    """[v3.18.4] اجرای INSERT/UPDATE با خود-ترمیمی.
+
+    اگر جدول instructors با schema قدیمی (بدون ستون‌های min_units /
+    max_teaching_units / desired_units و ...) ساخته شده باشد، INSERT/UPDATE
+    با خطای «no such column» شکست می‌خورد. در این حالت ابتدا
+    ensure_instructors_table (که شامل مایگریشن ADD COLUMN است) اجرا می‌شود و
+    یک بار دیگر تلاش می‌کنیم. SQLite از ADD COLUMN روی جدول پر هم پشتیبانی
+    می‌کند و این کار additive و بدون آسیب به داده‌های موجود است.
+
+    همچنین برخلاف execute_query (که خطا را swallow کرده و None برمی‌گرداند)،
+    این تابع پیام واقعی خطا را برمی‌گرداند تا مسیر API بتواند ok:False صادقانه
+    گزارش کند («انجام شد» در حالی که چیزی ذخیره نشده، دیگر رخ نمی‌دهد)."""
+    params = tuple(params)
+    try:
+        with db.get_connection() as conn:
+            conn.execute(query, params)
+            conn.commit()
+        return True, None
+    except Exception as _first_err:
+        logger.warning(f"_run_mutation_with_selfheal: first attempt failed ({_first_err}); running ensure_instructors_table and retrying")
+        try:
+            ensure_instructors_table(db)
+            with db.get_connection() as conn:
+                conn.execute(query, params)
+                conn.commit()
+            logger.info("✓ _run_mutation_with_selfheal: self-heal succeeded on retry")
+            return True, None
+        except Exception as e2:
+            logger.error(f"_run_mutation_with_selfheal: retry also failed: {e2}")
+            return False, f"خطای پایگاه‌داده هنگام ذخیره‌سازی استاد: {e2}"
+
+
 def get_all_instructors(db, search: str = "", cooperation_type: str = "") -> List[Dict[str, Any]]:
     query = 'SELECT * FROM instructors WHERE 1=1'
     params = []
@@ -428,9 +461,9 @@ def create_instructor(db, data: Dict[str, Any]) -> Tuple[Optional[int], Optional
         password_hash,
         data.get("source", "local"),
     )
-    result = db.execute_query(query, params)
-    if result is None:
-        return None, "خطا در ذخیره‌سازی"
+    ok, err = _run_mutation_with_selfheal(db, query, params)
+    if not ok:
+        return None, err
     rows = db.execute_query("SELECT last_insert_rowid() AS id")
     if rows:
         return (rows[0]["id"] if isinstance(rows[0], dict) else rows[0][0]), None
@@ -499,8 +532,11 @@ def update_instructor(db, instructor_id: int, data: Dict[str, Any]) -> Tuple[boo
         1 if data.get("is_active", True) else 0,
     ] + extra_params + [instructor_id]
 
-    result = db.execute_query(query, tuple(params))
-    return (result is not None), None
+    # [v3.18.4] از helper با خود-ترمیمی استفاده می‌کنیم: اگر ستون‌هایی مثل
+    # min_units/max_teaching_units/desired_units در جدول قدیمی موجود نباشند،
+    # ابتدا مایگریشن اجرا شده و UPDATE دوباره تلاش می‌شود. همچنین پیام واقعی
+    # خطا برمی‌گردد (نه ok:True کاذب).
+    return _run_mutation_with_selfheal(db, query, tuple(params))
 
 
 def delete_instructor(db, instructor_id: int) -> Tuple[bool, Optional[str]]:
