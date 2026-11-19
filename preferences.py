@@ -1103,7 +1103,7 @@ def get_credits_map(db):
         except Exception:
             rows = db.execute_query("SELECT unique_code, credits FROM courses WHERE credits IS NOT NULL")
         for r in (rows or []):
-            d = r if isinstance(r, dict) else {}
+            d = dict(r) if not isinstance(r, dict) else r   # [v3.19.6] sqlite3.Row → dict (در غیر این صورت .get() همیشه None برمی‌گرداند و نقشه خالی می‌شد)
             uc = normalize_code(d.get("unique_code") or "")
             if not uc or uc in credits_map:
                 continue
@@ -1151,7 +1151,7 @@ def get_instructor_total_credits(db, instructor_code, exclude_pref_id=None, cred
     rows = db.execute_query(query, params)
     total = 0
     for r in (rows or []):
-        d = r if isinstance(r, dict) else {}
+        d = dict(r) if not isinstance(r, dict) else r   # [v3.19.6] sqlite3.Row → dict
         name = d.get("course_name") or ""
         if "کارورزی" in name or "پروژه" in name:
             continue

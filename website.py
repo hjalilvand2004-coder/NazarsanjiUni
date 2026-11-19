@@ -1259,7 +1259,7 @@ def api_service_users():
         return jsonify({"ok": False, "error": str(e)}), 500
     users = []
     for r in (rows or []):
-        d = r if isinstance(r, dict) else {}
+        d = dict(r) if not isinstance(r, dict) else r   # [v3.19.6] sqlite3.Row → dict
         users.append({
             "username": d.get("student_number") or "",
             "full_name": d.get("name") or "",
@@ -2206,38 +2206,38 @@ def api_slot_times_periods():
 @admin_or_instructor_required
 def api_courses_by_group():
     """گرفتن دروس یکتا گروه‌بندی‌شده بر اساس course_group."""
-    # [v3.19.1] تعداد واحد = نظری + عملی (پیشتر فقط نظری محاسبه می‌شد)
+    # [v3.19.6] تعداد واحد هر درس یکتا = جمع نظری+عملی از «یک ردیف» واحد.
+    # پیشتر دو زیرپرسوجوی مستقل برای theory_credits و practical_credits زده می‌شد
+    # که می‌توانست نظری را از یک ردیف و عملی را از ردیفِ دیگری بردارد → مثلاً
+    # «آزمایشگاه سیستم‌های عامل» (۱ واحد) به‌اشتباه ۲ واحد می‌شد (نظری=۱ از سال ۱۳۹۴
+    # + عملی=۱ از سال ۱۰۰) و «آزمون نرم‌افزار» (۳ واحد) به‌اشتباه ۴ واحد.
+    # اکنون منبع واحد، prefs_module.get_credits_map است — همان نقشه‌ای که برای
+    # کنترل کف/سقف واحدهای ثبت‌شده به‌کار می‌رود؛ مودال و جدول همیشه هم‌خوان می‌مانند.
     try:
         rows = db.execute_query(
             """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group,
-               (SELECT theory_credits FROM courses WHERE unique_code = uc.unique_code AND theory_credits IS NOT NULL LIMIT 1) AS theory_credits,
-               (SELECT practical_credits FROM courses WHERE unique_code = uc.unique_code AND practical_credits IS NOT NULL LIMIT 1) AS practical_credits,
                (SELECT credits FROM courses WHERE unique_code = uc.unique_code AND credits IS NOT NULL LIMIT 1) AS credits_text
                FROM unique_courses uc WHERE uc.is_active = 1 ORDER BY uc.course_group, uc.title"""
         )
     except Exception:
         # پایگاه‌های قدیمی بدون ستون‌های theory_credits/practical_credits
         rows = db.execute_query(
-            """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group,
-               (SELECT credits FROM courses WHERE unique_code = uc.unique_code AND credits IS NOT NULL LIMIT 1) AS credits_text
+            """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group
                FROM unique_courses uc WHERE uc.is_active = 1 ORDER BY uc.course_group, uc.title"""
         )
+    # نقشهٔ واحد کانونی: unique_code نرمال‌شده → جمع نظری+عملی از یک ردیف
+    credits_map = prefs_module.get_credits_map(db) if PREFERENCES_AVAILABLE else {}
+    norm = prefs_module.normalize_code if PREFERENCES_AVAILABLE else (lambda x: str(x or ""))
     items = []
     for r in (rows or []):
         c = dict(r) if not isinstance(r, dict) else r
-        theory = c.get("theory_credits") or 0
-        practical = c.get("practical_credits") or 0
-        total = (theory or 0) + (practical or 0)
-        if not total:
-            # fallback: تجزیه‌ی رشته‌ی «نظری+عملی» مانند «2+1»
-            txt = c.get("credits_text") or ""
-            try:
-                total = sum(int(p) for p in str(txt).split("+") if p.strip().isdigit())
-            except Exception:
-                total = 0
+        total = int(credits_map.get(norm(str(c.get("unique_code") or "")), 0) or 0)
         c["credits"] = total
-        if "credits_text" not in c:
-            c["credits_text"] = ""
+        txt = str(c.get("credits_text") or "").strip()
+        # نمایش تمیز: رشتهٔ credits خالی یا چیزی مثل «+1» → همان عدد کل
+        if not txt or txt.startswith("+"):
+            txt = str(total) if total else ""
+        c["credits_text"] = txt
         items.append(c)
     # گروه‌بندی
     groups = {}

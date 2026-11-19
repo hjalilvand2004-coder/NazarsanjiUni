@@ -409,7 +409,10 @@
                     <td>
                         <div style="display:flex;gap:4px;justify-content:center;align-items:center;">
                             <button onclick="editTeaching({{ item.id }})" class="btn btn-ghost btn-sm" title="ویرایش" style="padding:4px 8px;">✏️</button>
-                            <button onclick="deleteTeaching({{ item.id }})" class="btn btn-ghost btn-sm" title="حذف" style="color:#ef4444;padding:4px 8px;">🗑️</button>
+                            <!-- [v3.19.6] دکمهٔ حذف از جدول مطلوبیت‌های تدریس حذف شد.
+                                 حذف دروس باید از طریق مودال «📚 انتخاب درس‌های مطلوب»
+                                 (همگام‌سازی) انجام شود تا کنترل کف/سقف واحدها روی
+                                 وضعیت نهایی اعمال گردد، نه روی هر حذف میانی. -->
                         </div>
                     </td>
                 </tr>
