@@ -2752,13 +2752,16 @@ def admin_unique_courses():
 
     # [v3.19.3] تعداد واحد نظری/عملی هر درس یکتا — استخراج از جدول دروس تفکیکی (courses)
     # فقط نمایشی است؛ بدون نوشتن در جدول دروس یکتا یا تفکیکی.
-    try:
-        cred_rows = db.execute_query(
-            "SELECT unique_code, theory_credits, practical_credits, credits FROM courses"
-        ) or []
-    except Exception:
+    # [v3.19.5] رفع 500: execute_query بر خطا None برمی‌گرداند (raise نمی‌کند)؛
+    # پس باید None را چک کنیم، نه try/except. همچنین sqlite3.Row متد .get() ندارد
+    # و باید به dict تبدیل شود.
+    cred_rows = db.execute_query(
+        "SELECT unique_code, theory_credits, practical_credits, credits FROM courses"
+    )
+    if cred_rows is None:
         # پایگاه‌های قدیمی بدون ستون‌های theory_credits/practical_credits
         cred_rows = db.execute_query("SELECT unique_code, credits FROM courses") or []
+    cred_rows = [dict(r) for r in (cred_rows or [])]
     credits_map = {}
     for r in cred_rows:
         uc = str(r.get("unique_code") or "")

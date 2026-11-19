@@ -122,7 +122,7 @@ MESSAGES = {
 }
 
 # متادیتای نسخه
-APP_VERSION = "3.19.4"
+APP_VERSION = "3.19.5"
 APP_RELEASE_DATE = "1405-08-29"
 APP_TITLE = "سامانه نظرسنجی دروس"
 MOBILE_APP_NAME = "دانشجو360"
