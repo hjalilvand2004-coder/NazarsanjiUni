@@ -1090,21 +1090,35 @@ def get_teaching_preference_by_id(db, pref_id):
 
 
 def get_credits_map(db):
-    """نقشه‌ای از unique_code نرمال‌شده → تعداد واحد.
+    """نقشه‌ای از unique_code نرمال‌شده → تعداد واحد (نظری + عملی).
     مقاوم در برابر تفاوت ارقام فارسی/عربی، فاصله و خط‌تیره بین جداول."""
     ensure_preferences_tables(db)
     credits_map = {}
     try:
-        rows = db.execute_query("SELECT unique_code, credits FROM courses WHERE credits IS NOT NULL")
+        try:
+            rows = db.execute_query(
+                "SELECT unique_code, credits, theory_credits, practical_credits "
+                "FROM courses WHERE credits IS NOT NULL OR theory_credits IS NOT NULL OR practical_credits IS NOT NULL"
+            )
+        except Exception:
+            rows = db.execute_query("SELECT unique_code, credits FROM courses WHERE credits IS NOT NULL")
         for r in (rows or []):
             d = r if isinstance(r, dict) else {}
             uc = normalize_code(d.get("unique_code") or "")
-            cr = d.get("credits") or 0
-            if uc and cr and uc not in credits_map:
+            if not uc or uc in credits_map:
+                continue
+            theory = d.get("theory_credits") or 0
+            practical = d.get("practical_credits") or 0
+            total = (theory or 0) + (practical or 0)
+            if not total:
+                # fallback: تجزیه‌ی رشته‌ی «نظری+عملی» مانند «2+1»
+                txt = d.get("credits") or ""
                 try:
-                    credits_map[uc] = int(cr)
-                except (ValueError, TypeError):
-                    pass
+                    total = sum(int(p) for p in str(txt).split("+") if p.strip().isdigit())
+                except Exception:
+                    total = 0
+            if total:
+                credits_map[uc] = total
     except Exception:
         pass
     return credits_map

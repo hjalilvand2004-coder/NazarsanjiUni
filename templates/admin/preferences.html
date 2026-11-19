@@ -21,6 +21,20 @@
     .prefs-modal .close-btn { color: #64748b; background: none; border: none; cursor: pointer; font-size: 22px; }
     .prefs-modal .close-btn:hover { color: #ef4444; }
 
+    /* [v3.19.1] مودال راهنما */
+    .help-chip { padding: 6px 12px; border-radius: 999px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .15s; }
+    .help-chip:hover { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
+    .help-section { margin-bottom: 20px; scroll-margin-top: 12px; }
+    .help-section h4 { font-size: 14px; color: #0f172a; margin: 0 0 6px; display: flex; align-items: center; gap: 6px; }
+    .help-section p, .help-section li { font-size: 13px; color: #334155; line-height: 1.9; }
+    .help-section ul { padding-right: 18px; margin: 6px 0; }
+    .help-section li { margin-bottom: 4px; }
+    .help-note { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #3730a3; margin: 8px 0; line-height: 1.8; }
+    .help-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--glass-border); background: var(--bg-2); color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .help-btn:hover { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
+    .help-icon-btn { width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer; background: rgba(99,102,241,0.12); color: #4338ca; font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+    .help-icon-btn:hover { background: rgba(99,102,241,0.22); }
+
     /* تقویم هفتگی */
     .weekly-calendar {
         background: #f8fafc; border: 1px solid #e2e8f0;
@@ -303,9 +317,10 @@
 {% if is_instructor %}
 <!-- [v3.18.0] پیغام خوش‌آمدگویی استاد -->
 <div style="background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(139,92,246,0.10));border:1px solid var(--glass-border);border-radius:14px;padding:14px 20px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;">
-    <div style="font-size:15px;color:var(--text-1);font-weight:700;">
-        👋 سلام استاد {{ instructor_full_name }}
-        {% if instructor_cooperation_type %}<span style="color:var(--accent);font-weight:600;"> — نوع همکاری: {{ instructor_cooperation_type }}</span>{% endif %}
+    <div style="font-size:15px;color:var(--text-1);font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span>👋 سلام استاد {{ instructor_full_name }}
+        {% if instructor_cooperation_type %}<span style="color:var(--accent);font-weight:600;"> — نوع همکاری: {{ instructor_cooperation_type }}</span>{% endif %}</span>
+        <button onclick="openHelp('overview')" class="help-icon-btn" title="راهنما">؟</button>
     </div>
     {% if min_units and min_units > 0 %}
     <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;">
@@ -337,13 +352,14 @@
 </div>
 
 <!-- دکمه‌های اقدام اصلی -->
-<div style="display:flex;gap:10px;margin-bottom:20px;justify-content:flex-start;">
+<div style="display:flex;gap:10px;margin-bottom:20px;justify-content:flex-start;align-items:center;flex-wrap:wrap;">
     <button onclick="openCoursePicker()" class="btn btn-primary" style="font-size:14px;padding:8px 16px;">
         📚 انتخاب درس‌های مطلوب
     </button>
     <button onclick="openTimePicker()" class="btn btn-primary" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);font-size:14px;padding:8px 16px;">
         📅 انتخاب زمان‌های مطلوب
     </button>
+    <button onclick="openHelp('overview')" class="help-btn" style="margin-right:auto;">❓ راهنما</button>
 </div>
 
 <!-- تب‌ها -->
@@ -470,7 +486,10 @@
                 <h3 style="font-size:18px;">📚 انتخاب درس‌های مطلوب</h3>
                 <p style="font-size:12px;color:var(--text-3);margin-top:4px;">درس‌های مورد علاقه خود را انتخاب کنید — بر اساس گروه دسته‌بندی شده</p>
             </div>
-            <button onclick="closeCoursePicker()" class="close-btn">✕</button>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <button onclick="openHelp('teaching')" class="help-icon-btn" title="راهنمای انتخاب درس">؟</button>
+                <button onclick="closeCoursePicker()" class="close-btn">✕</button>
+            </div>
         </div>
         <div style="padding:20px 28px;overflow-y:auto;flex:1;">
             <input type="text" id="course-search-input" placeholder="🔍 جستجوی درس..." style="width:100%;margin-bottom:14px;padding:10px 14px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:13px;color:#0f172a;background:#ffffff;font-family:inherit;" oninput="filterCourseList()">
@@ -509,7 +528,10 @@
                 <h3 style="font-size:16px;">📅 انتخاب زمان‌های مطلوب</h3>
                 <p style="font-size:11px;color:#64748b;margin-top:2px;">روز و بازه زمانی مورد نظر خود را بصری انتخاب کنید</p>
             </div>
-            <button onclick="closeTimePicker()" class="close-btn">✕</button>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <button onclick="openHelp('time')" class="help-icon-btn" title="راهنمای انتخاب زمان">؟</button>
+                <button onclick="closeTimePicker()" class="close-btn">✕</button>
+            </div>
         </div>
 
         <div style="padding:12px 22px;overflow-y:auto;flex:1;">
@@ -577,7 +599,113 @@
     </div>
 </div>
 
+<!-- ====== [v3.19.1] Help Modal ====== -->
+<div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:10000;align-items:center;justify-content:center;padding:20px;">
+    <div class="prefs-modal" style="max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:18px 26px;">
+            <div>
+                <h3 style="font-size:18px;">راهنمای مطلوبیت‌های اساتید</h3>
+                <p style="font-size:12px;color:#64748b;margin-top:4px;">پاسخ پرسش‌های رایج — متناسب با نسخهٔ {{ app_version }}{% if active_period %} • دورهٔ فعال: {{ active_period.name }}{% endif %}</p>
+            </div>
+            <button onclick="closeHelp()" class="close-btn">✕</button>
+        </div>
+        <div style="display:flex;gap:8px;padding:12px 26px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
+            <button class="help-chip" onclick="scrollHelp('overview')">👋 شروع کار</button>
+            <button class="help-chip" onclick="scrollHelp('teaching')">📚 مطلوبیت تدریس</button>
+            <button class="help-chip" onclick="scrollHelp('time')">📅 مطلوبیت زمان</button>
+            <button class="help-chip" onclick="scrollHelp('units')">🎯 محاسبهٔ واحد</button>
+            <button class="help-chip" onclick="scrollHelp('faq')">❓ سوالات متداول</button>
+        </div>
+        <div id="help-content" style="padding:20px 26px;overflow-y:auto;flex:1;">
+
+            <section class="help-section" id="help-overview">
+                <h4>👋 شروع کار</h4>
+                <p>از این صفحه دو نوع مطلوبیت ثبت می‌کنید:</p>
+                <ul>
+                    <li><strong>مطلوبیت تدریس:</strong> درس‌هایی که مایل به تدریس آن‌ها هستید.</li>
+                    <li><strong>مطلوبیت زمان:</strong> روزها و بازه‌های زمانی که آمادهٔ تدریس هستید.</li>
+                </ul>
+                {% if active_period %}
+                <div class="help-note">📅 دورهٔ فعال: <strong>{{ active_period.name }}</strong> ({{ active_period.semester }}){% if active_period.deadline %} — مهلت ثبت: <strong>{{ active_period.deadline }}</strong>{% endif %}. تا پایان این مهلت می‌توانید انتخاب‌ها را ثبت و ویرایش کنید.</div>
+                {% else %}
+                <div class="help-note" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;">⛔ در حال حاضر دورهٔ فعالی برای ثبت مطلوبیت فعال نیست. تا فعال‌شدن دوره توسط مدیریت صبر کنید.</div>
+                {% endif %}
+            </section>
+
+            <section class="help-section" id="help-teaching">
+                <h4>📚 مطلوبیت تدریس (انتخاب درس)</h4>
+                <ul>
+                    <li>روی دکمهٔ <strong>«انتخاب درس‌های مطلوب»</strong> بزنید.</li>
+                    <li>دروس بر اساس گروه دسته‌بندی شده‌اند؛ برای دسترسی سریع از کادر جستجو استفاده کنید.</li>
+                    <li>هر درس را با کلیک انتخاب یا لغو کنید.</li>
+                    <li>می‌توانید <strong>اولویت</strong> دروس انتخابی را تنظیم کنید (عدد کوچک‌تر = اولویت بالاتر).</li>
+                    <li>در فیلد <strong>«تعداد واحد مطلوب برای تدریس»</strong>، مجموع واحدی که مایلید تدریس کنید را وارد کنید (باید بین کف و سقف باشد).</li>
+                    <li>در پایان <strong>«ذخیره انتخاب‌ها»</strong> را بزنید.</li>
+                </ul>
+            </section>
+
+            <section class="help-section" id="help-time">
+                <h4>📅 مطلوبیت زمان (انتخاب بازه)</h4>
+                <ul>
+                    <li>روی دکمهٔ <strong>«انتخاب زمان‌های مطلوب»</strong> بزنید.</li>
+                    <li>ابتدا <strong>روز هفته</strong>، سپس <strong>بازهٔ زمانی</strong> (صبح / ظهر / بعدازظهر) را انتخاب کنید.</li>
+                    <li>انتخاب یک بازه به این معناست که در <strong>تمام</strong> آن بازه آمادهٔ تدریس هستید.</li>
+                    <li>می‌توانید چند روز و چند بازه را هم‌زمان انتخاب کنید.</li>
+                    <li>در پایان <strong>«ذخیره همه»</strong> را بزنید.</li>
+                </ul>
+            </section>
+
+            <section class="help-section" id="help-units">
+                <h4>🎯 محاسبهٔ تعداد واحد</h4>
+                <p>تعداد واحد هر درس برابر است با <strong>مجموع واحدهای نظری و عملی</strong>.</p>
+                <div class="help-note">مثال: درسی با <strong>۲</strong> واحد نظری و <strong>۱</strong> واحد عملی، مجموعاً <strong>۳</strong> واحد محاسبه می‌شود و همین ۳ واحد در کنترل کف/سقف واحد مطلوب شما لحاظ می‌گردد.</div>
+                {% if min_units and min_units > 0 %}
+                <p>محدودهٔ مجاز شما: کف <strong style="color:#0ea5e9;">{{ min_units }}</strong> — سقف <strong style="color:#ef4444;">{{ max_units }}</strong> — واحد مورد نظر <strong style="color:#6366f1;">{{ desired_units }}</strong>.</p>
+                {% else %}
+                <p>کف و سقف واحد بر اساس <strong>نوع همکاری</strong> شما در جدول اساتید تعیین می‌شود. اگر آن را نمی‌بینید، نوع همکاری‌تان هنوز مشخص نشده است.</p>
+                {% endif %}
+                <p style="font-size:12px;color:#64748b;">📝 دروس <strong>کارورزی</strong> و <strong>پروژه</strong> از محاسبهٔ واحد مستثنی هستند.</p>
+            </section>
+
+            <section class="help-section" id="help-faq">
+                <h4>❓ سوالات متداول</h4>
+                <p><strong>چرا نمی‌توانم درس/زمان ثبت کنم؟</strong><br>احتمالاً دورهٔ ثبت مطلوبیت فعال نیست یا مهلت آن گذشته است.</p>
+                <p><strong>چرا کف/سقف واحد را نمی‌بینم؟</strong><br>نوع همکاری شما در جدول اساتید مشخص نشده؛ با مدیریت تماس بگیرید.</p>
+                <p><strong>بعد از ذخیره می‌توانم ویرایش کنم؟</strong><br>بله — تا زمانی که دوره فعال است، انتخاب‌ها قابل ویرایش است.</p>
+                <p><strong>چرا واحد عملی هم حساب می‌شود؟</strong><br>چون بار واقعی تدریس برابر مجموع واحدهای نظری و عملی است.</p>
+            </section>
+
+        </div>
+        <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px;">
+            <span style="font-size:11px;color:#94a3b8;">سامانه نظرسنجی دروس — نسخهٔ {{ app_version }}</span>
+            <button onclick="closeHelp()" class="btn btn-primary">متوجه شدم</button>
+        </div>
+    </div>
+</div>
+
 <script>
+// [v3.19.1] مودال راهنما
+function openHelp(topic) {
+    const m = document.getElementById('help-modal');
+    if (!m) return;
+    m.style.display = 'flex';
+    const c = document.getElementById('help-content');
+    if (c) c.scrollTop = 0;
+    if (topic) { setTimeout(function () { scrollHelp(topic); }, 30); }
+}
+function closeHelp() {
+    const m = document.getElementById('help-modal');
+    if (m) m.style.display = 'none';
+}
+function scrollHelp(topic) {
+    const el = document.getElementById('help-' + topic);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+(function () {
+    const m = document.getElementById('help-modal');
+    if (m) m.addEventListener('click', function (e) { if (e.target === m) closeHelp(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHelp(); });
+})();
 let allCourses = [];
 let courseGroups = {};
 let selectedCourses = new Set();
@@ -797,7 +925,7 @@ function renderCourseGroups() {
                                     <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCourse(${id})">
                                     <div>
                                         <div class="course-title">${title}</div>
-                                        <div class="course-meta">${code ? `<code>${code}</code>` : ''} ${c.credits ? ` • ${c.credits} واحد` : ''}</div>
+                                        <div class="course-meta">${code ? `<code>${code}</code>` : ''} ${(c.credits_text || c.credits) ? ` • ${c.credits_text || c.credits} واحد` : ''}</div>
                                     </div>
                                 </div>
                             </div>
@@ -840,7 +968,7 @@ function toggleCourse(id) {
             let currentCredits = getTotalCredits();
             const course = allCourses.find(c => (c.id || c.unique_code) == id);
             if (course && !isExcludedFromCredits(course)) {  // کارورزی/پروژه در سقف لحاظ نمی‌شوند
-                const credits = parseInt(course.credits) || 0;
+                const credits = Number(course.credits) || 0;   // [v3.19.1] نظری+عملی
                 if (currentCredits + credits > ceiling) {
                     showToast(`⚠️ امکان انتخاب این درس وجود ندارد.\nمجموع واحدها ${currentCredits + credits} می‌شود که بیشتر از سقف مجاز (${ceiling} واحد) است.\nکف: ${maxUnits} | سقف: ${ceiling} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)`);
                     return;
@@ -880,7 +1008,7 @@ function getTotalCredits() {
         const course = allCourses.find(c => (c.id || c.unique_code) == id);
         if (course) {
             if (isExcludedFromCredits(course)) continue;  // کارورزی/پروژه در محاسبه مستثنی
-            total += parseInt(course.credits) || 0;
+            total += Number(course.credits) || 0;   // [v3.19.1] نظری+عملی (credits اکنون جمع کل است)
         }
     }
     return total;

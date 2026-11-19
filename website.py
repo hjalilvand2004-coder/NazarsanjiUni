@@ -1826,6 +1826,7 @@ def admin_preferences():
             active_period=active_period,
             submission_open=submission_open,
             credits_map=credits_map,
+            app_version=APP_VERSION,
         )
     teaching_items = prefs_module.get_all_teaching_preferences(db)
     time_items = prefs_module.get_all_time_preferences(db)
@@ -1841,6 +1842,7 @@ def admin_preferences():
         active_period=active_period,
         submission_open=submission_open,
         credits_map=credits_map,
+        app_version=APP_VERSION,
     )
 
 
@@ -2203,12 +2205,39 @@ def api_slot_times_periods():
 @admin_or_instructor_required
 def api_courses_by_group():
     """گرفتن دروس یکتا گروه‌بندی‌شده بر اساس course_group."""
-    rows = db.execute_query(
-        """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group,
-           (SELECT credits FROM courses WHERE unique_code = uc.unique_code AND credits IS NOT NULL LIMIT 1) AS credits
-           FROM unique_courses uc WHERE uc.is_active = 1 ORDER BY uc.course_group, uc.title"""
-    )
-    items = [dict(r) if not isinstance(r, dict) else r for r in rows] if rows else []
+    # [v3.19.1] تعداد واحد = نظری + عملی (پیشتر فقط نظری محاسبه می‌شد)
+    try:
+        rows = db.execute_query(
+            """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group,
+               (SELECT theory_credits FROM courses WHERE unique_code = uc.unique_code AND theory_credits IS NOT NULL LIMIT 1) AS theory_credits,
+               (SELECT practical_credits FROM courses WHERE unique_code = uc.unique_code AND practical_credits IS NOT NULL LIMIT 1) AS practical_credits,
+               (SELECT credits FROM courses WHERE unique_code = uc.unique_code AND credits IS NOT NULL LIMIT 1) AS credits_text
+               FROM unique_courses uc WHERE uc.is_active = 1 ORDER BY uc.course_group, uc.title"""
+        )
+    except Exception:
+        # پایگاه‌های قدیمی بدون ستون‌های theory_credits/practical_credits
+        rows = db.execute_query(
+            """SELECT uc.unique_code AS id, uc.unique_code, uc.title, uc.course_group,
+               (SELECT credits FROM courses WHERE unique_code = uc.unique_code AND credits IS NOT NULL LIMIT 1) AS credits_text
+               FROM unique_courses uc WHERE uc.is_active = 1 ORDER BY uc.course_group, uc.title"""
+        )
+    items = []
+    for r in (rows or []):
+        c = dict(r) if not isinstance(r, dict) else r
+        theory = c.get("theory_credits") or 0
+        practical = c.get("practical_credits") or 0
+        total = (theory or 0) + (practical or 0)
+        if not total:
+            # fallback: تجزیه‌ی رشته‌ی «نظری+عملی» مانند «2+1»
+            txt = c.get("credits_text") or ""
+            try:
+                total = sum(int(p) for p in str(txt).split("+") if p.strip().isdigit())
+            except Exception:
+                total = 0
+        c["credits"] = total
+        if "credits_text" not in c:
+            c["credits_text"] = ""
+        items.append(c)
     # گروه‌بندی
     groups = {}
     for c in items:
@@ -2355,12 +2384,9 @@ def admin_index():
     # نظرسنجی فعال (برای محدوده‌سازی شمارش شرکت‌کنندگان)
     survey = get_active_survey_info()
 
-    # [v3.19] تفکیک کاربران به نوع دانشجو (پیوسته/ناپیوسته) و تعداد اساتید فعال
-    users_payooste = db.execute_query(
-        "SELECT COUNT(*) AS c FROM authorized_users WHERE student_type = 'پیوسته'"
-    )[0]["c"]
-    users_napayooste = db.execute_query(
-        "SELECT COUNT(*) AS c FROM authorized_users WHERE student_type = 'ناپیوسته'"
+    # [v3.19.1] شمارش کاربران: کل (ردیف بالا)، دانشجو، استاد — بدون تفکیک پیوسته/ناپیوسته
+    students_count = db.execute_query(
+        "SELECT COUNT(*) AS c FROM authorized_users WHERE COALESCE(user_type,'student') = 'student'"
     )[0]["c"]
     instructors_count = 0
     if INSTRUCTORS_AVAILABLE:
@@ -2431,8 +2457,7 @@ def admin_index():
             "total_courses": total_courses,
             "blocked_users": blocked_users,
             "today_requests": today_requests,
-            "users_payooste": users_payooste,
-            "users_napayooste": users_napayooste,
+            "students_count": students_count,
             "instructors_count": instructors_count,
             "survey_participants": survey_participants,
             "survey_responses": survey_responses,
