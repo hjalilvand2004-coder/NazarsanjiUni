@@ -18,6 +18,7 @@
 <div class="alert alert-info">
     📚 این جدول <strong>دروس پایه یکتا</strong> است که از فایل <code>CourceListYekta.xlsx</code> بارگذاری شده.
     ادمین می‌تواند دروس را اضافه، ویرایش یا غیرفعال کند. هر درس یکتا با کد یکتا (unique_code) شناخته می‌شود.
+    ستون‌های <strong>«تعداد واحد نظری»</strong> و <strong>«تعداد واحد عملی»</strong> از جدول دروس تفکیکی استخراج و صرفاً نمایش داده می‌شوند (ویرایش‌پذیر نیستند).
 </div>
 
 <div class="card">
@@ -40,6 +41,8 @@
                 <th>عنوان درس</th>
                 <th>گروه</th>
                 <th>ظرفیت برآوردی</th>
+                <th>تعداد واحد نظری</th>
+                <th>تعداد واحد عملی</th>
                 <th>وضعیت</th>
                 <th>تعداد تفکیکی</th>
                 <th>عملیات</th>
@@ -56,6 +59,8 @@
                     {% else %}—{% endif %}
                 </td>
                 <td>{{ c.capacity_estimate or '—' }}</td>
+                <td>{{ c.theory_credits if c.theory_credits else '—' }}</td>
+                <td>{{ c.practical_credits if c.practical_credits else '—' }}</td>
                 <td>
                     {% if c.is_active %}
                     <span class="badge badge-success">فعال</span>
@@ -79,7 +84,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-3);">دروسی یافت نشد.</td></tr>
+            <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-3);">دروسی یافت نشد.</td></tr>
             {% endfor %}
         </tbody>
     </table>

@@ -2738,6 +2738,7 @@ def admin_unique_courses():
     """مدیریت دروس یکتا (پایه)"""
     search = request.args.get("q", "")
     courses = db.get_all_unique_courses(only_active=False, search=search or None)
+    courses = [dict(c) if not isinstance(c, dict) else c for c in courses]
 
     # تعداد دروس تفکیکی هر کد یکتا
     course_counts = {}
@@ -2747,6 +2748,40 @@ def admin_unique_courses():
             (c["unique_code"],)
         )
         course_counts[c["unique_code"]] = cnt[0]["c"] if cnt else 0
+
+    # [v3.19.3] تعداد واحد نظری/عملی هر درس یکتا — استخراج از جدول دروس تفکیکی (courses)
+    # فقط نمایشی است؛ بدون نوشتن در جدول دروس یکتا یا تفکیکی.
+    try:
+        cred_rows = db.execute_query(
+            "SELECT unique_code, theory_credits, practical_credits, credits FROM courses"
+        ) or []
+    except Exception:
+        # پایگاه‌های قدیمی بدون ستون‌های theory_credits/practical_credits
+        cred_rows = db.execute_query("SELECT unique_code, credits FROM courses") or []
+    credits_map = {}
+    for r in cred_rows:
+        uc = str(r.get("unique_code") or "")
+        if not uc:
+            continue
+        theory = r.get("theory_credits") or 0
+        practical = r.get("practical_credits") or 0
+        if not theory and not practical:
+            # fallback: تجزیهٔ رشتهٔ «نظری+عملی» مانند «2+1»
+            txt = r.get("credits") or ""
+            try:
+                parts = [int(p) for p in str(txt).split("+") if p.strip().isdigit()]
+                if parts:
+                    theory = parts[0]
+                    practical = parts[1] if len(parts) > 1 else 0
+            except Exception:
+                pass
+        cur = credits_map.get(uc)
+        if cur is None or ((cur["theory"] == 0 and cur["practical"] == 0) and (theory or practical)):
+            credits_map[uc] = {"theory": int(theory or 0), "practical": int(practical or 0)}
+    for c in courses:
+        info = credits_map.get(str(c.get("unique_code") or ""), {"theory": 0, "practical": 0})
+        c["theory_credits"] = info["theory"]
+        c["practical_credits"] = info["practical"]
 
     return render_template(
         "admin/unique_courses.html",
