@@ -53,14 +53,18 @@ COOPERATION_UNITS_RULES = {
 
 def _norm_coop_key(cooperation_type):
     """نرمال‌سازی نوع همکاری برای تطبیق با کلید قواعد (مقاوم در برابر تفاوت املایی:
-    هیئت↔هیات، دستیار آموزشی↔دستیارآموزشی، فاصله/ZWNJ)."""
+    هیئت↔هیات، دستیار آموزشی↔دستیارآموزشی، فاصله/ZWNJ، خط‌فاصله، پرانتز، اسلش)."""
     if not cooperation_type:
         return ""
     s = str(cooperation_type).strip()
-    s = s.replace("\u200c", "")          # حذف نیم‌فاصله
-    s = s.replace("هیئت", "هیات")         # یکسان‌سازی هیئت → هیات
-    s = s.replace("دستیار آموزشی", "دستیارآموزشی")  # با فاصله → بدون فاصله
-    s = s.replace(" ", "")                # حذف فاصله‌های باقی‌مانده
+    # حذف نیم‌فاصله و جداکننده‌های رایج: خط‌فاصله (هیفن/ام‌دش/ان‌دش/کشیده‌ی عربی)،
+    # پرانتز، کروشه، اسلش، نقطه، ویرگول — تا «هیات علمی-مامور» و «هیات علمی(مامور)»
+    # و «هیات علمی/مامور» هم با «هیات علمی مامور» تطبیق کنند.
+    for sep in ("\u200c", "-", "—", "–", "\u0640", "(", ")", "[", "]", "/", "\\", ".", "،", ","):
+        s = s.replace(sep, "")
+    s = s.replace("هیئت", "هیات")                       # یکسان‌سازی هیئت → هیات
+    s = s.replace("دستیار آموزشی", "دستیارآموزشی")     # با فاصله → بدون فاصله
+    s = s.replace(" ", "")                              # حذف فاصله‌های باقی‌مانده
     return s
 
 def get_units_rule(cooperation_type):
@@ -206,11 +210,16 @@ def ensure_instructors_table(db):
         except Exception:
             pass
 
-        # [v3.18.1] همگام‌سازی قطعی کف/سقف/وحد موردنظر بر اساس نوع همکاری.
-        # برای هر استاد با نوع همکاری شناخته‌شده، مقادیر min/max/desired مطابق قاعده
-        # تنظیم می‌شود — فقط ردیف‌هایی که با قاعده تطابق ندارند به‌روز می‌شوند (idempotent).
-        # این تضمین می‌کند اساتیدی که اخیراً اضافه شده‌اند هم مقادیر صحیح بگیرند
-        # (برخلاف بک‌فیل یک‌باره که بعد از اولین اجرا دیگر اجرا نمی‌شد).
+        # [v3.18.2] همگام‌سازی کف/سقف بر اساس نوع همکاری + حفظ واحد مطلوب کاربر.
+        # برای هر استاد با نوع همکاری شناخته‌شده:
+        #   - min/max (کف/سقف) همیشه مطابق قاعده (قطعی — کف و سقف ثابت هر نوع همکاری).
+        #   - desired_units (تعداد واحد مورد نظر): اگر کاربر مقدار معتبر درون [min,max]
+        #     تنظیم کرده باشد، حفظ می‌شود؛ در غیر این صورت (۰ یا خارج از بازه) به مقدار
+        #     پیش‌فرض قاعده برمی‌گردد. این تضمین می‌کند ویرایش استاد در مودال مطلوبیت
+        #     پس از ری‌استارت هم باقی بماند.
+        #   - املای نوع همکاری به فرم استاندارد تبدیل می‌شود تا جستجو/فیلتر دقیق کار کند
+        #     (مثلاً «هیات علمی-مامور» → «هیات علمی مامور»).
+        _canon_map = {_norm_coop_key(ct): ct for ct in COOPERATION_TYPES}
         try:
             rows = cursor.execute(
                 "SELECT id, cooperation_type, min_units, max_teaching_units, desired_units FROM instructors"
@@ -222,15 +231,26 @@ def ensure_instructors_table(db):
                 cur_min = r[2] if len(r) > 2 and r[2] is not None else 0
                 cur_max = r[3] if len(r) > 3 and r[3] is not None else 0
                 cur_des = r[4] if len(r) > 4 and r[4] is not None else 0
-                rule = get_units_rule(ct)
-                if rule and (cur_min != rule["min"] or cur_max != rule["max"] or cur_des != rule["desired"]):
+                canon_ct = _canon_map.get(_norm_coop_key(ct))
+                if not canon_ct:
+                    continue  # نوع همکاری نامشخص — به مقادیر دست نمی‌زنیم
+                rule = COOPERATION_UNITS_RULES.get(canon_ct)
+                if not rule:
+                    continue
+                new_min = rule["min"]
+                new_max = rule["max"]
+                # واحد مطلوب کاربر فقط در صورتی حفظ می‌شود که در بازه کف..سقف باشد
+                new_des = cur_des if (cur_des and new_min <= cur_des <= new_max) else rule["desired"]
+                if (cur_min != new_min or cur_max != new_max or cur_des != new_des
+                        or (ct or "") != canon_ct):
                     cursor.execute(
-                        "UPDATE instructors SET min_units = ?, max_teaching_units = ?, desired_units = ? WHERE id = ?",
-                        (rule["min"], rule["max"], rule["desired"], rid),
+                        "UPDATE instructors SET min_units = ?, max_teaching_units = ?, "
+                        "desired_units = ?, cooperation_type = ? WHERE id = ?",
+                        (new_min, new_max, new_des, canon_ct, rid),
                     )
                     updated += 1
             if updated:
-                logger.info(f"✓ instructors units synced by cooperation type ({updated} rows updated)")
+                logger.info(f"✓ instructors units + coop-type synced ({updated} rows updated)")
         except Exception as e:
             logger.warning(f"instructors units sync skipped: {e}")
 

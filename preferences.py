@@ -365,6 +365,16 @@ def update_desired_units_for_instructor(db, instructor_code: str, desired_credit
             "WHERE instructor_code = ?",
             (val, inst),
         )
+        # [v3.18.2] به‌روزرسانی desired_units در جدول instructors هم (مبنای کف/سقف مودال).
+        # تا ویرایش استاد در مودال مطلوبیت، در جدول استاد منعکس و پایدار بماند و دفعه‌ی
+        # بعد با همان مقدار در تکست‌باکس «تعداد واحد مطلوب» پر شود.
+        try:
+            conn.execute(
+                "UPDATE instructors SET desired_units = ? WHERE username = ? OR code = ?",
+                (val, inst, inst),
+            )
+        except Exception:
+            pass  # جدول instructors یا ستون desired_units موجود نبود — نادیده
         conn.commit()
         conn.close()
         return True

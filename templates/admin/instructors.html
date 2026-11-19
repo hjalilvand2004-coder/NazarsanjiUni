@@ -64,8 +64,8 @@
     </div>
     <div class="stat-card">
         <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg></div>
-        <div class="stat-label">هیئت علمی</div>
-        <div class="stat-value">{{ instructors|selectattr('cooperation_type', 'equalto', 'هیئت علمی')|list|length }}</div>
+        <div class="stat-label">هیات علمی</div>
+        <div class="stat-value">{{ instructors|selectattr('cooperation_type', 'equalto', 'هیات علمی')|list|length }}</div>
     </div>
     <div class="stat-card">
         <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
@@ -79,10 +79,11 @@
     <input type="text" id="search-input" class="form-input" placeholder="🔍 جستجو..." value="{{ search }}" oninput="filterTable()" style="max-width:300px;">
     <select id="coop-filter" class="form-select" style="width:auto;" onchange="filterTable()">
         <option value="">همه انواع همکاری</option>
-        <option value="هیئت علمی" {% if cooperation_type == 'هیئت علمی' %}selected{% endif %}>هیئت علمی</option>
+        <option value="هیات علمی" {% if cooperation_type == 'هیات علمی' %}selected{% endif %}>هیات علمی</option>
         <option value="دستیارآموزشی" {% if cooperation_type == 'دستیارآموزشی' %}selected{% endif %}>دستیارآموزشی</option>
-        <option value="هیئت علمی وابسته" {% if cooperation_type == 'هیئت علمی وابسته' %}selected{% endif %}>هیئت علمی وابسته</option>
+        <option value="هیات علمی وابسته" {% if cooperation_type == 'هیات علمی وابسته' %}selected{% endif %}>هیات علمی وابسته</option>
         <option value="حق التدریس" {% if cooperation_type == 'حق التدریس' %}selected{% endif %}>حق التدریس</option>
+        <option value="هیات علمی مامور" {% if cooperation_type == 'هیات علمی مامور' %}selected{% endif %}>هیات علمی مامور</option>
         <option value="سایر" {% if cooperation_type == 'سایر' %}selected{% endif %}>سایر</option>
     </select>
     <span style="font-size:12px;color:var(--text-3);">تعداد نتایج: <strong id="result-count">{{ instructors|length }}</strong></span>
@@ -118,7 +119,7 @@
                 <td><code dir="ltr">{{ item.phone or '—' }}</code></td>
                 <td>{{ item.group or '—' }}</td>
                 <td>
-                    {% if item.cooperation_type == 'هیئت علمی' %}<span class="badge badge-success">{{ item.cooperation_type }}</span>
+                    {% if item.cooperation_type == 'هیات علمی' %}<span class="badge badge-success">{{ item.cooperation_type }}</span>
                     {% elif item.cooperation_type %}{{ item.cooperation_type }}
                     {% else %}—{% endif %}
                 </td>
