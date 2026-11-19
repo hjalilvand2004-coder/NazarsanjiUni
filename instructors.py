@@ -259,6 +259,56 @@ def ensure_instructors_table(db):
     return True
 
 
+def sync_instructors_units(db) -> int:
+    """[v3.18.3] همگام‌سازی سبک کف/سقف + استانداردسازی نوع همکاری — فقط بخش sync
+    (بدون مایگریشن schema). قابل فراخوانی در هر بار بارگذاری صفحه‌ی اساتید تا
+    اطمینان حاصل شود min/max/desired همیشه مطابق نوع همکاری است حتی اگر اپ قبل از
+    استقرار نسخه‌ی جدید راه‌اندازی شده باشد و بک‌فیل کامل هنوز اجرا نشده باشد.
+
+    - min/max (کف/سقف): همیشه مطابق قاعده (قطعی).
+    - desired_units: حفظ می‌شود اگر درون [min,max] باشد؛ در غیر این صورت پیش‌فرض قاعده.
+    - املای نوع همکاری به فرم استاندارد تبدیل می‌شود.
+    - اساتید با نوع نامشخص دست‌نخورده می‌مانند.
+    مقدار بازگشتی: تعداد ردیف‌های به‌روز‌شده."""
+    try:
+        _canon_map = {_norm_coop_key(ct): ct for ct in COOPERATION_TYPES}
+        with db.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT id, cooperation_type, min_units, max_teaching_units, desired_units FROM instructors"
+            ).fetchall()
+            updated = 0
+            for r in rows:
+                rid = r[0]
+                ct = r[1] if len(r) > 1 else ""
+                cur_min = r[2] if len(r) > 2 and r[2] is not None else 0
+                cur_max = r[3] if len(r) > 3 and r[3] is not None else 0
+                cur_des = r[4] if len(r) > 4 and r[4] is not None else 0
+                canon_ct = _canon_map.get(_norm_coop_key(ct))
+                if not canon_ct:
+                    continue
+                rule = COOPERATION_UNITS_RULES.get(canon_ct)
+                if not rule:
+                    continue
+                new_min = rule["min"]
+                new_max = rule["max"]
+                new_des = cur_des if (cur_des and new_min <= cur_des <= new_max) else rule["desired"]
+                if (cur_min != new_min or cur_max != new_max or cur_des != new_des
+                        or (ct or "") != canon_ct):
+                    conn.execute(
+                        "UPDATE instructors SET min_units = ?, max_teaching_units = ?, "
+                        "desired_units = ?, cooperation_type = ? WHERE id = ?",
+                        (new_min, new_max, new_des, canon_ct, rid),
+                    )
+                    updated += 1
+            if updated:
+                conn.commit()
+                logger.info(f"✓ sync_instructors_units: {updated} rows updated")
+            return updated
+    except Exception as e:
+        logger.warning(f"sync_instructors_units skipped: {e}")
+        return 0
+
+
 # ==================================================
 # تنظیمات سرویس واکشی (mirror file)
 # ==================================================
@@ -401,6 +451,11 @@ def update_instructor(db, instructor_id: int, data: Dict[str, Any]) -> Tuple[boo
         extra_params.append(hash_password(password))
 
     full_name = (data.get("full_name") or "").strip()
+    if not full_name:
+        # [v3.18.3] فرم ویرایش نام/نام‌خانوادگی جدا می‌فرستد → full_name را ترکیب کن
+        first = (data.get("first_name") or "").strip()
+        last = (data.get("last_name") or "").strip()
+        full_name = f"{first} {last}".strip()
     if not full_name:
         full_name = data.get("name", "").strip()
 

@@ -221,8 +221,8 @@
                     </select>
                 </div>
                 <div style="grid-column:1/-1;">
-                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">رمز عبور {% if not is_edit %}*{% else %}(در صورت تغییر){% endif %}</label>
-                    <input type="password" id="i-password" name="password" class="form-input" placeholder="حداقل ۶ کاراکتر" {% if not is_edit %}required{% endif %}>
+                    <label class="form-label" style="color:#334155;font-weight:600;display:block;margin-bottom:6px;">رمز عبور <span style="font-weight:400;font-size:12px;color:#64748b;">(در افزودن الزامی، در ویرایش فقط در صورت تغییر)</span></label>
+                    <input type="password" id="i-password" name="password" class="form-input" placeholder="حداقل ۶ کاراکتر">
                 </div>
                 <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;">
                     <input type="checkbox" id="i-is_active" name="is_active" value="1" checked style="width:18px;height:18px;accent-color:var(--accent);">
@@ -329,10 +329,15 @@ const COOP_UNITS_RULES = {
     "حق التدریس":        {min: 6,  max: 16, desired: 16},
     "هیات علمی مامور":   {min: 16, max: 19, desired: 19},
 };
-// نرمال‌سازی نوع همکاری برای تطبیق با کلید قواعد (هیئت↔هیات، فاصله)
+// نرمال‌سازی نوع همکاری برای تطبیق با کلید قواعد (هیئت↔هیات، فاصله، خط‌فاصله، پرانتز، اسلش)
 function _canonicalCoop(v){
     if(!v) return '';
-    let s = String(v).replace(/\u200c/g,'').replace(/هیئت/g,'هیات').replace(/دستیار آموزشی/g,'دستیارآموزشی').replace(/ /g,'');
+    let s = String(v)
+        .replace(/\u200c/g,'')                  // نیم‌فاصله
+        .replace(/[-—–()\[\]\/\\.,،]/g,'')      // خط‌فاصله/پرانتز/کروشه/اسلش/نقطه/ویرگول
+        .replace(/هیئت/g,'هیات')
+        .replace(/دستیار آموزشی/g,'دستیارآموزشی')
+        .replace(/ /g,'');
     const map = {'هیاتعلمی':'هیات علمی','دستیارآموزشی':'دستیارآموزشی','هیاتعلمیوابسته':'هیات علمی وابسته','حقالتدریس':'حق التدریس','هیاتعلمیمامور':'هیات علمی مامور'};
     return map[s] || v;
 }
@@ -354,8 +359,11 @@ function editInstructor(id) {
         document.getElementById('inst-id').value = item.id;
         document.getElementById('i-code').value = item.code || '';
         document.getElementById('i-username').value = item.username || '';
-        document.getElementById('i-first_name').value = item.first_name || '';
-        document.getElementById('i-last_name').value = item.last_name || '';
+        // [v3.18.3] جدول instructors فقط full_name دارد → نام/نام‌خانوادگی را از آن می‌شکافیم
+        const fullName = item.full_name || '';
+        const sp = fullName.indexOf(' ');
+        document.getElementById('i-first_name').value = sp >= 0 ? fullName.substring(0, sp) : fullName;
+        document.getElementById('i-last_name').value = sp >= 0 ? fullName.substring(sp + 1) : '';
         document.getElementById('i-phone').value = item.phone || '';
         document.getElementById('i-email').value = item.email || '';
         document.getElementById('i-group').value = item.group || '';
@@ -379,10 +387,22 @@ async function submitInstructor(e) {
     new FormData(form).forEach((v, k) => data[k] = v);
     const id = data.id;
     delete data.id;
-    if (data.max_teaching_units) data.max_teaching_units = parseInt(data.max_teaching_units);
-    if (data.min_units) data.min_units = parseInt(data.min_units);
-    if (data.desired_units) data.desired_units = parseInt(data.desired_units);
+    // [v3.18.3] ترکیب نام + نام‌خانوادگی → full_name (جدول instructors فقط full_name دارد)
+    const fn = (data.first_name || '').trim();
+    const ln = (data.last_name || '').trim();
+    data.full_name = (fn + ' ' + ln).trim();
+    delete data.first_name;
+    delete data.last_name;
+    // کف/سقف/موردنظر همیشه به عدد صحیح (خالی → ۰ → سرور از نوع همکاری استخراج می‌کند)
+    data.min_units = parseInt(data.min_units) || 0;
+    data.max_teaching_units = parseInt(data.max_teaching_units) || 0;
+    data.desired_units = parseInt(data.desired_units) || 0;
     data.is_active = data.is_active === '1' || data.is_active === true;
+    // [v3.18.3] رمز عبور فقط در افزودن الزامی است (ویرایش بدون رمز هم مجاز است)
+    if (!id && !data.password) {
+        alert('⚠️ رمز عبور برای استاد جدید الزامی است.');
+        return;
+    }
     if (!data.password) delete data.password;
     const url = id ? `/api/instructors/${id}` : '/api/instructors';
     const method = id ? 'PUT' : 'POST';

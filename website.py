@@ -2260,6 +2260,9 @@ def admin_instructors():
         return render_template("admin/instructors_unavailable.html", admin=g.admin)
     search = request.args.get("search", "")
     cooperation_type = request.args.get("cooperation_type", "")
+    # [v3.18.3] همگام‌سازی سبک قبل از نمایش، تا کف/سقف/موردنظر و نوع همکاری همیشه
+    # مطابق قواعد باشد (حتی اگر اپ قبل از استقرار نسخه‌ی جدید راه‌اندازی شده باشد).
+    instructors_module.sync_instructors_units(db)
     items = instructors_module.get_all_instructors(db, search=search, cooperation_type=cooperation_type)
     sync_settings = instructors_module.load_sync_settings()
     return render_template(
