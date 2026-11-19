@@ -2352,6 +2352,64 @@ def admin_index():
         (today,)
     )[0]["c"]
 
+    # نظرسنجی فعال (برای محدوده‌سازی شمارش شرکت‌کنندگان)
+    survey = get_active_survey_info()
+
+    # [v3.19] تفکیک کاربران به نوع دانشجو (پیوسته/ناپیوسته) و تعداد اساتید فعال
+    users_payooste = db.execute_query(
+        "SELECT COUNT(*) AS c FROM authorized_users WHERE student_type = 'پیوسته'"
+    )[0]["c"]
+    users_napayooste = db.execute_query(
+        "SELECT COUNT(*) AS c FROM authorized_users WHERE student_type = 'ناپیوسته'"
+    )[0]["c"]
+    instructors_count = 0
+    if INSTRUCTORS_AVAILABLE:
+        try:
+            instructors_module.ensure_instructors_table(db)
+            ir = db.execute_query("SELECT COUNT(*) AS c FROM instructors WHERE is_active = 1")
+            instructors_count = ir[0]["c"] if ir else 0
+        except Exception:
+            instructors_count = 0
+
+    # [v3.19] شرکت در نظرسنجی (دانشجو) — محدوده‌ی نظرسنجی فعال اگر موجود باشد
+    if survey and survey.get("id"):
+        sp = db.execute_query(
+            "SELECT COUNT(DISTINCT user_id) AS c FROM course_requests WHERE survey_id = ?",
+            (survey["id"],)
+        )
+        survey_participants = sp[0]["c"] if sp else 0
+        sr = db.execute_query(
+            "SELECT COUNT(*) AS c FROM course_requests WHERE survey_id = ?",
+            (survey["id"],)
+        )
+        survey_responses = sr[0]["c"] if sr else 0
+    else:
+        survey_participants = participants
+        survey_responses = total_requests
+
+    # [v3.19] مطلوبیت ثبت‌شده اساتید — تعداد اساتید یکتای ثبت‌کننده (تدریس ∪ زمان)
+    satisfaction_submitters = 0
+    satisfaction_total = 0
+    if PREFERENCES_AVAILABLE:
+        try:
+            prefs_module.ensure_preferences_tables(db)
+            su = db.execute_query(
+                "SELECT COUNT(*) AS c FROM ("
+                " SELECT DISTINCT instructor_code FROM teaching_preferences"
+                " WHERE instructor_code IS NOT NULL AND instructor_code <> ''"
+                " UNION"
+                " SELECT DISTINCT instructor_code FROM time_preferences"
+                " WHERE instructor_code IS NOT NULL AND instructor_code <> ''"
+                " )"
+            )
+            satisfaction_submitters = su[0]["c"] if su else 0
+            tt = db.execute_query("SELECT COUNT(*) AS c FROM teaching_preferences")
+            mt = db.execute_query("SELECT COUNT(*) AS c FROM time_preferences")
+            satisfaction_total = (tt[0]["c"] if tt else 0) + (mt[0]["c"] if mt else 0)
+        except Exception:
+            satisfaction_submitters = 0
+            satisfaction_total = 0
+
     top_courses = db.get_top_courses(10)
     daily = db.get_daily_requests(14)
     sections = db.get_section_distribution()
@@ -2362,8 +2420,6 @@ def admin_index():
     channel_stats = db.get_channel_stats()
     recent_logins = db.get_recent_logins(8)
 
-    # نظرسنجی فعال
-    survey = get_active_survey_info()
     all_surveys = db.get_all_surveys()
 
     return render_template(
@@ -2375,6 +2431,13 @@ def admin_index():
             "total_courses": total_courses,
             "blocked_users": blocked_users,
             "today_requests": today_requests,
+            "users_payooste": users_payooste,
+            "users_napayooste": users_napayooste,
+            "instructors_count": instructors_count,
+            "survey_participants": survey_participants,
+            "survey_responses": survey_responses,
+            "satisfaction_submitters": satisfaction_submitters,
+            "satisfaction_total": satisfaction_total,
         },
         top_courses=top_courses,
         daily=daily,
@@ -2912,10 +2975,28 @@ def admin_reports():
     sections = db.get_section_distribution()
     student_types = db.get_student_type_distribution()
     years = db.get_year_distribution()
+    # [v3.19] جزییات انتخاب دانشجویان — فقط ادمین می‌بیند (کدام دانشجو چه درسی را انتخاب کرده)
+    is_admin = g.admin.get("role") != "instructor"
+    student_selections = []
+    if is_admin:
+        try:
+            student_selections = db.execute_query("""
+                SELECT u.name AS student_name, u.student_number, u.student_type,
+                       c.course_title, c.section, c.year, c.credits,
+                       cr.created_at, cr.channel
+                FROM course_requests cr
+                JOIN authorized_users u ON cr.user_id = u.id
+                LEFT JOIN courses c ON cr.id_courses = c.id
+                ORDER BY cr.created_at DESC
+                LIMIT 500
+            """) or []
+        except Exception:
+            student_selections = []
     return render_template(
         "admin/reports.html",
         top_courses=top_courses, daily=daily,
         sections=sections, student_types=student_types, years=years,
+        student_selections=student_selections, is_admin=is_admin,
         admin=g.admin,
     )
 
@@ -3371,31 +3452,51 @@ def admin_preferences_reports():
     """گزارش‌های مطلوبیت‌های اساتید."""
     if not PREFERENCES_AVAILABLE:
         return render_template("admin/preferences_unavailable.html", admin=g.admin)
-    
+
+    is_admin = g.admin.get("role") != "instructor"
+
     # آمار کلی
     teaching_items = prefs_module.get_all_teaching_preferences(db)
     time_items = prefs_module.get_all_time_preferences(db)
-    
+
     # الف) آمار ثبت فراوانی اساتید
     total_instructors = 0
     if INSTRUCTORS_AVAILABLE:
-        inst_rows = db.execute_query("SELECT COUNT(*) AS c FROM instructors")
-        total_instructors = inst_rows[0]["c"] if inst_rows else 0
-    
+        inst_rows_count = db.execute_query("SELECT COUNT(*) AS c FROM instructors")
+        total_instructors = inst_rows_count[0]["c"] if inst_rows_count else 0
+
     instructors_with_teaching = set()
     for p in teaching_items:
         code = p.get("instructor_code") or p.get("instructor_username")
         if code:
             instructors_with_teaching.add(code)
-    
+
     instructors_with_time = set()
     for p in time_items:
         code = p.get("instructor_code") or p.get("instructor_username")
         if code:
             instructors_with_time.add(code)
-    
+
     instructors_with_any = instructors_with_teaching | instructors_with_time
     instructors_without = total_instructors - len(instructors_with_any)
+
+    # [v3.19] لیست اساتید بدون ثبت مطلوبیت (نام + نوع همکاری + گروه) — فقط ادمین
+    non_submitters = []
+    if is_admin and INSTRUCTORS_AVAILABLE:
+        try:
+            inst_rows = db.execute_query(
+                'SELECT code, username, full_name, cooperation_type, "group" '
+                'FROM instructors ORDER BY full_name'
+            ) or []
+            for r in inst_rows:
+                r = dict(r) if not isinstance(r, dict) else r
+                code = r.get("code")
+                uname = r.get("username")
+                if (code and code in instructors_with_any) or (uname and uname in instructors_with_any):
+                    continue
+                non_submitters.append(r)
+        except Exception:
+            non_submitters = []
     
     # ب) فراوانی درس‌ها
     course_freq = {}
@@ -3457,6 +3558,8 @@ def admin_preferences_reports():
     return render_template(
         "admin/preferences_reports.html",
         admin=g.admin,
+        is_admin=is_admin,
+        non_submitters=non_submitters,
         total_instructors=total_instructors,
         instructors_with_teaching=len(instructors_with_teaching),
         instructors_with_time=len(instructors_with_time),
@@ -3477,7 +3580,10 @@ def admin_preferences_reports():
 @app.route("/admin/preferences-reports/export-teaching")
 @admin_or_instructor_required
 def admin_preferences_export_teaching():
-    """خروجی اکسل مطلوبیت‌های تدریس."""
+    """خروجی اکسل مطلوبیت‌های تدریس — فقط ادمین (شامل نام استاد و درس)."""
+    if g.admin.get("role") == "instructor":
+        flash("خروجی اکسل فقط در دسترس ادمین است.", "error")
+        return redirect(url_for("admin_preferences_reports"))
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
     import io
@@ -3491,6 +3597,7 @@ def admin_preferences_export_teaching():
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='مطلوبیت‌های تدریس', index=False)
     output.seek(0)
+    audit_log("report_excel", "preferences", None, "دانلود اکسل مطلوبیت تدریس")
     return make_response(
         output.read(),
         200,
@@ -3504,7 +3611,10 @@ def admin_preferences_export_teaching():
 @app.route("/admin/preferences-reports/export-time")
 @admin_or_instructor_required
 def admin_preferences_export_time():
-    """خروجی اکسل مطلوبیت‌های زمان."""
+    """خروجی اکسل مطلوبیت‌های زمان — فقط ادمین (شامل نام استاد و زمان)."""
+    if g.admin.get("role") == "instructor":
+        flash("خروجی اکسل فقط در دسترس ادمین است.", "error")
+        return redirect(url_for("admin_preferences_reports"))
     if not PREFERENCES_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
     import io
@@ -3518,12 +3628,68 @@ def admin_preferences_export_time():
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='مطلوبیت‌های زمان', index=False)
     output.seek(0)
+    audit_log("report_excel", "preferences", None, "دانلود اکسل مطلوبیت زمان")
     return make_response(
         output.read(),
         200,
         {
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition': 'attachment; filename=time_preferences.xlsx'
+        }
+    )
+
+
+@app.route("/admin/preferences-reports/export-non-submitters")
+@admin_or_instructor_required
+def admin_preferences_export_non_submitters():
+    """[v3.19] خروجی اکسل اساتید بدون ثبت مطلوبیت — فقط ادمین."""
+    if g.admin.get("role") == "instructor":
+        flash("خروجی اکسل فقط در دسترس ادمین است.", "error")
+        return redirect(url_for("admin_preferences_reports"))
+    if not PREFERENCES_AVAILABLE or not INSTRUCTORS_AVAILABLE:
+        return jsonify({"ok": False, "error": "module_unavailable"}), 503
+    import io
+    try:
+        import pandas as pd
+    except ImportError:
+        return jsonify({"ok": False, "error": "pandas not installed"}), 500
+    # محاسبه‌ی اساتید بدون ثبت (همان منطق admin_preferences_reports)
+    teaching_items = prefs_module.get_all_teaching_preferences(db)
+    time_items = prefs_module.get_all_time_preferences(db)
+    with_any = set()
+    for p in teaching_items + time_items:
+        code = p.get("instructor_code") or p.get("instructor_username")
+        if code:
+            with_any.add(code)
+    inst_rows = db.execute_query(
+        'SELECT code, username, full_name, cooperation_type, "group" '
+        'FROM instructors ORDER BY full_name'
+    ) or []
+    non_sub = []
+    for r in inst_rows:
+        r = dict(r) if not isinstance(r, dict) else r
+        code = r.get("code"); uname = r.get("username")
+        if (code and code in with_any) or (uname and uname in with_any):
+            continue
+        non_sub.append({
+            "نام استاد": r.get("full_name") or "",
+            "کد": r.get("code") or "",
+            "نام کاربری": r.get("username") or "",
+            "نوع همکاری": r.get("cooperation_type") or "",
+            "گروه": r.get("group") or "",
+        })
+    df = pd.DataFrame(non_sub) if non_sub else pd.DataFrame([{"نام استاد": "—", "کد": "", "نام کاربری": "", "نوع همکاری": "", "گروه": ""}])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='اساتید_بدون_ثبت', index=False)
+    output.seek(0)
+    audit_log("report_excel", "preferences", None, "دانلود اکسل اساتید بدون ثبت مطلوبیت")
+    return make_response(
+        output.read(),
+        200,
+        {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename=instructors_without_satisfaction.xlsx'
         }
     )
 

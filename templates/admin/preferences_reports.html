@@ -8,9 +8,10 @@
         <div class="breadcrumb">خانه / گزارش‌ها / مطلوبیت‌ها</div>
     </div>
     <div class="actions">
-        {% if admin.role != 'instructor' %}
-        <a href="{{ url_for('admin_preferences_export_teaching') }}" class="btn btn-ghost btn-sm">📥 خروجی اکسل تدریس</a>
-        <a href="{{ url_for('admin_preferences_export_time') }}" class="btn btn-ghost btn-sm">📥 خروجی اکسل زمان</a>
+        {% if is_admin %}
+        <a href="{{ url_for('admin_preferences_export_non_submitters') }}" class="btn btn-ghost btn-sm">📥 اکسل اساتید بدون ثبت</a>
+        <a href="{{ url_for('admin_preferences_export_teaching') }}" class="btn btn-ghost btn-sm">📥 اکسل تدریس</a>
+        <a href="{{ url_for('admin_preferences_export_time') }}" class="btn btn-ghost btn-sm">📥 اکسل زمان</a>
         {% endif %}
         <a href="{{ url_for('admin_preferences') }}" class="btn btn-ghost btn-sm">← بازگشت</a>
     </div>
@@ -18,9 +19,15 @@
 
 {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}
-        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    <div class="alert alert-{{ cat }}">{{ msg }}</div>
     {% endfor %}
 {% endwith %}
+
+{% if not is_admin %}
+<div class="alert alert-info" style="font-size:13px;">
+    📌 این نمای گزارش، خلاصه و آمار تجمیعی مطلوبیت‌ها است. لیست اساتید بدون ثبت، جزییات نام استاد/درس/زمان و خروجی اکسل فقط در دسترس ادمین است.
+</div>
+{% endif %}
 
 <!-- الف) آمار کلی اساتید -->
 <div class="card" style="margin-bottom:20px;">
@@ -46,6 +53,39 @@
         </div>
     </div>
 </div>
+
+{% if is_admin %}
+<!-- [v3.19] اساتید بدون ثبت مطلوبیت — فقط ادمین -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <div class="card-title">الف‌ب) اساتید بدون ثبت مطلوبیت ({{ non_submitters|length }} نفر)</div>
+        <div style="font-size:12px;color:var(--text-3);">اساتیدی که هنوز مطلوبیت تدریس یا زمان ثبت نکرده‌اند • <a href="{{ url_for('admin_preferences_export_non_submitters') }}" class="btn btn-ghost btn-sm" style="display:inline-flex;">📥 خروجی اکسل</a></div>
+    </div>
+    <div style="padding:20px;">
+        {% if non_submitters %}
+        <div style="overflow-x:auto;">
+        <table class="table">
+            <thead><tr><th>#</th><th>نام استاد</th><th>کد</th><th>نام کاربری</th><th>نوع همکاری</th><th>گروه</th></tr></thead>
+            <tbody>
+                {% for ns in non_submitters %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ ns.full_name or '—' }}</td>
+                    <td>{{ ns.code or '—' }}</td>
+                    <td>{{ ns.username or '—' }}</td>
+                    <td>{{ ns.cooperation_type or '—' }}</td>
+                    <td>{{ ns.group or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p style="color:var(--success);text-align:center;padding:20px;">✅ همه‌ی اساتید مطلوبیت ثبت کرده‌اند.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
 <!-- ب) فراوانی درس‌ها -->
 <div class="card" style="margin-bottom:20px;">

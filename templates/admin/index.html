@@ -67,6 +67,40 @@
     </div>
 </div>
 
+<!-- [v3.19] تفکیک کاربران به نوع + شمارش مشارکت در نظرسنجی و مطلوبیت اساتید -->
+<div class="stats-grid" style="margin-top:16px;">
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+        <div class="stat-label">دانشجویان پیوسته</div>
+        <div class="stat-value">{{ stats.users_payooste }}</div>
+        <div class="stat-delta">از {{ stats.total_users }} کاربر</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+        <div class="stat-label">دانشجویان ناپیوسته</div>
+        <div class="stat-value">{{ stats.users_napayooste }}</div>
+        <div class="stat-delta">از {{ stats.total_users }} کاربر</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div class="stat-label">اساتید فعال</div>
+        <div class="stat-value">{{ stats.instructors_count }}</div>
+        <div class="stat-delta">جدول اساتید</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+        <div class="stat-label">شرکت در نظرسنجی (دانشجو)</div>
+        <div class="stat-value" style="color:var(--success);background:none;-webkit-text-fill-color:var(--success);">{{ stats.survey_participants }}</div>
+        <div class="stat-delta">{{ stats.survey_responses }} پاسخ ثبت‌شده</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg></div>
+        <div class="stat-label">مطلوبیت ثبت‌شده اساتید</div>
+        <div class="stat-value" style="color:var(--accent);background:none;-webkit-text-fill-color:var(--accent);">{{ stats.satisfaction_submitters }}</div>
+        <div class="stat-delta">{{ stats.satisfaction_total }} ثبت مطلوبیت</div>
+    </div>
+</div>
+
 <div class="grid-2">
     <div class="card">
         <div class="card-header">
