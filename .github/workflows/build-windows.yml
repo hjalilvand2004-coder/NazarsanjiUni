@@ -1,0 +1,62 @@
+name: Build Windows Portable
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build with PyInstaller (onedir)
+        shell: pwsh
+        run: python -m PyInstaller BaleSurvey.spec --noconfirm --clean
+
+      - name: Assemble portable folder
+        shell: pwsh
+        run: |
+          Copy-Item run_portable.bat, stop_portable.bat, README_PORTABLE_WINDOWS.md dist/BaleSurvey/
+          Compress-Archive -Path dist/BaleSurvey/* -DestinationPath BaleSurvey-portable-windows.zip
+          Write-Host "Zip size:" (Get-Item BaleSurvey-portable-windows.zip).Length "bytes"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BaleSurvey-portable-windows
+          path: BaleSurvey-portable-windows.zip
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BaleSurvey-portable-windows.zip
+          name: ${{ github.ref_name }} - Windows Portable
+          body: |
+            نسخهٔ پرتیبل ویندوز سامانه نظرسنجی دروس.
+
+            ## نحوهٔ استفاده
+            1. فایل `BaleSurvey-portable-windows.zip` را از حالت فشرده خارج کنید.
+            2. روی `run_portable.bat` دو بار کلیک کنید.
+            3. مرورگر به‌صورت خودکار در http://127.0.0.1:8082 باز می‌شود.
+            4. ورود ادمین: `admin` / `admin@1405`
+
+            داده‌ها (دیتابیس + تنظیمات) در پوشهٔ `data/` کنار فایل اجرایی ذخیره می‌شوند و قابل‌انتقال هستند.

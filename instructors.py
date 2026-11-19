@@ -29,8 +29,9 @@ except ImportError:
 # مسیرها و ثابت‌ها
 # ==================================================
 
+from portable import app_path as _app_path  # [v3.19.4] مسیر پرتیبل/فریز
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INSTRUCTORS_SYNC_FILE = os.path.join(BASE_DIR, "instructors_sync.json")
+INSTRUCTORS_SYNC_FILE = _app_path("instructors_sync.json")
 
 # انواع همکاری معتبر (مطابق درخواست کاربر)
 COOPERATION_TYPES = [

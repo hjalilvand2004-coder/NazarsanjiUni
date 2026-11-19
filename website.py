@@ -97,8 +97,9 @@ if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() not in ("u
         pass
 
 import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
+from portable import res_path, data_path, app_path  # [v3.19.4] مسیرهای پرتیبل/فریز
+BASE_DIR = res_path()
+app = Flask(__name__, template_folder=res_path("templates"), static_folder=res_path("static"))
 app.config["JSON_AS_ASCII"] = False
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 app.config["SECRET_KEY"] = SECRET_KEY
@@ -482,7 +483,7 @@ def instructor_register():
 
         # ذخیره اطلاعات اضافی استاد در فایل mirror (بدون تغییر دیتابیس)
         import json
-        instructor_extra_file = os.path.join(BASE_DIR, "instructor_profiles.json")
+        instructor_extra_file = app_path("instructor_profiles.json")
         try:
             data = {}
             if os.path.exists(instructor_extra_file):
@@ -552,7 +553,7 @@ def download_app():
     survey = get_active_survey_info()
     # بررسی وجود فایل‌های APK
     import os
-    apk_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "downloads")
+    apk_dir = data_path("downloads")
     apks = []
     if os.path.exists(apk_dir):
         for f in sorted(os.listdir(apk_dir)):
@@ -571,7 +572,7 @@ def download_apk(filename):
     """دانلود مستقیم فایل APK"""
     from flask import send_from_directory, abort
     import os
-    apk_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "downloads")
+    apk_dir = data_path("downloads")
     # جلوگیری از path traversal
     if "/" in filename or "\\" in filename or ".." in filename:
         abort(404)
@@ -3935,7 +3936,7 @@ def serve_static(path):
 
 @app.route("/static/admin/<path:path>")
 def serve_admin_static(path):
-    return send_from_directory("static/admin", path)
+    return send_from_directory(res_path("static", "admin"), path)
 
 
 if __name__ == "__main__":
@@ -3953,4 +3954,7 @@ if __name__ == "__main__":
     print(f"  Mobile App: {MOBILE_APP_URL}")
     print(f"  Admin Login: admin / {DEFAULT_ADMIN_PASSWORD}")
     print("=" * 60)
-    app.run(host="0.0.0.0", port=WEBSITE_PORT, debug=False, use_reloader=False)
+    # [v3.19.4] امکان بازنویسی هاست/پورت از متغیر محیطی (برای نسخهٔ پرتیبل)
+    _host = os.environ.get("BALE_HOST", "0.0.0.0")
+    _port = int(os.environ.get("BALE_PORT", str(WEBSITE_PORT)))
+    app.run(host=_host, port=_port, debug=False, use_reloader=False)

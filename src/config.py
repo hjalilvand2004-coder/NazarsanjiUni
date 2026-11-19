@@ -4,6 +4,7 @@
 """
 
 import os
+from portable import res_path, data_path  # [v3.19.4] مسیرهای پرتیبل/فریز
 
 # هویت بازو
 BALE_BOT_TOKEN = "2040145005:aNWlFXY4Nc2XMk-N-1brdwBuI4P9QNWgk5Y"
@@ -24,15 +25,15 @@ APK_DOWNLOAD_URL = f"{WEBSITE_URL}/download-app"
 COMPANY_NAME = "شرکت ماه افزار هوشمند رسا"
 COMPANY_URL = "https://MahAI.ir"
 
-# دیتابیس
-DB_PATH = os.environ.get("COURSES_DB_PATH", "data/courses_survey.db")
+# دیتابیس — [v3.19.4] DB در مسیر قابل‌نوشتن (data/ کنار exe در حالت فریز)
+DB_PATH = os.environ.get("COURSES_DB_PATH") or data_path("courses_survey.db")
 MAX_COURSES_PER_USER = 6
 PASSING_SCORE = 60
 
-# فایل‌های پایه اکسل
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-YEKTA_COURSES_FILE = os.path.join(BASE_DIR, "data", "CourceListYekta.xlsx")
-DETAIL_COURSES_FILE = os.path.join(BASE_DIR, "data", "CourceListDetail.xlsx")
+# فایل‌های پایه اکسل — فقط‌خواندنی (res_path → _MEIPASS در حالت فریز)
+BASE_DIR = res_path()
+YEKTA_COURSES_FILE = res_path("data", "CourceListYekta.xlsx")
+DETAIL_COURSES_FILE = res_path("data", "CourceListDetail.xlsx")
 
 # احراز هویت
 SECRET_KEY = os.environ.get("SECRET_KEY", "behman-1405-survey-secret-key-v35-2c8f4a9b")
@@ -121,7 +122,7 @@ MESSAGES = {
 }
 
 # متادیتای نسخه
-APP_VERSION = "3.19.3"
+APP_VERSION = "3.19.4"
 APP_RELEASE_DATE = "1405-08-29"
 APP_TITLE = "سامانه نظرسنجی دروس"
 MOBILE_APP_NAME = "دانشجو360"

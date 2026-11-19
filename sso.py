@@ -54,9 +54,10 @@ logger = logging.getLogger("sso")
 # مسیرها و ثابت‌ها
 # ==================================================
 
+from portable import app_path as _app_path  # [v3.19.4] مسیر پرتیبل/فریز
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(BASE_DIR, "app_settings.json")
-SSO_LINKS_FILE = os.path.join(BASE_DIR, "sso_links.json")
+SETTINGS_FILE = _app_path("app_settings.json")
+SSO_LINKS_FILE = _app_path("sso_links.json")
 
 # کش‌ها
 _discovery_cache: Dict[str, Any] = {}
