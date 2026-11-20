@@ -667,7 +667,7 @@
                 {% else %}
                 <p>کف و سقف واحد بر اساس <strong>نوع همکاری</strong> شما در جدول اساتید تعیین می‌شود. اگر آن را نمی‌بینید، نوع همکاری‌تان هنوز مشخص نشده است.</p>
                 {% endif %}
-                <p style="font-size:12px;color:#64748b;">📝 دروس <strong>کارورزی</strong> و <strong>پروژه</strong> از محاسبهٔ واحد مستثنی هستند.</p>
+                <p style="font-size:12px;color:#64748b;">📝 دروس <strong>کارآموزی</strong> و <strong>پروژه</strong> از محاسبهٔ واحد مستثنی هستند.</p>
             </section>
 
             <section class="help-section" id="help-faq">
@@ -742,7 +742,7 @@ function getTableTeachingCredits(excludeId) {
         const id = parseInt(tr.getAttribute('data-teaching-id'));
         if (excludeId && id === excludeId) return;
         const name = tr.getAttribute('data-name') || '';
-        if (name.indexOf('کارورزی') >= 0 || name.indexOf('پروژه') >= 0) return;
+        if (name.indexOf('کارآموزی') >= 0 || name.indexOf('پروژه') >= 0) return;
         const code = tr.getAttribute('data-code') || '';
         total += CREDITS_MAP[normalizeCode(code)] || 0;
     });
@@ -752,10 +752,10 @@ function getTableTeachingCredits(excludeId) {
 const faDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
 function toFa(n) { return String(n).replace(/[0-9]/g, d => faDigits[d]); }
 
-// دروس کارورزی و پروژه در محاسبه سقف/کف واحد لحاظ نمی‌شوند
+// دروس کارآموزی و پروژه در محاسبه سقف/کف واحد لحاظ نمی‌شوند
 function isExcludedFromCredits(course) {
     const title = (course.title || course.course_name || '');
-    return title.indexOf('کارورزی') >= 0 || title.indexOf('پروژه') >= 0;
+    return title.indexOf('کارآموزی') >= 0 || title.indexOf('پروژه') >= 0;
 }
 
 // نرمال‌سازی کد درس — منطبق با prefs_module.normalize_code در Python:
@@ -970,10 +970,10 @@ function toggleCourse(id) {
             const ceiling = CEILING_UNITS;  // سقف
             let currentCredits = getTotalCredits();
             const course = allCourses.find(c => (c.id || c.unique_code) == id);
-            if (course && !isExcludedFromCredits(course)) {  // کارورزی/پروژه در سقف لحاظ نمی‌شوند
+            if (course && !isExcludedFromCredits(course)) {  // کارآموزی/پروژه در سقف لحاظ نمی‌شوند
                 const credits = Number(course.credits) || 0;   // [v3.19.1] نظری+عملی
                 if (currentCredits + credits > ceiling) {
-                    showToast(`⚠️ امکان انتخاب این درس وجود ندارد.\nمجموع واحدها ${currentCredits + credits} می‌شود که بیشتر از سقف مجاز (${ceiling} واحد) است.\nکف: ${maxUnits} | سقف: ${ceiling} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)`);
+                    showToast(`⚠️ امکان انتخاب این درس وجود ندارد.\nمجموع واحدها ${currentCredits + credits} می‌شود که بیشتر از سقف مجاز (${ceiling} واحد) است.\nکف: ${maxUnits} | سقف: ${ceiling} واحد\n(دروس کارآموزی و پروژه در محاسبه لحاظ نمی‌شوند)`);
                     return;
                 }
             }
@@ -1010,7 +1010,7 @@ function getTotalCredits() {
     for (const id of selectedCourses) {
         const course = allCourses.find(c => (c.id || c.unique_code) == id);
         if (course) {
-            if (isExcludedFromCredits(course)) continue;  // کارورزی/پروژه در محاسبه مستثنی
+            if (isExcludedFromCredits(course)) continue;  // کارآموزی/پروژه در محاسبه مستثنی
             total += Number(course.credits) || 0;   // [v3.19.1] نظری+عملی (credits اکنون جمع کل است)
         }
     }
@@ -1027,7 +1027,7 @@ function updateCourseCount() {
     if (maxUnits > 0) {
         html += ` • <span style="color:${credits > ceiling ? '#ef4444' : '#10b981'};font-weight:700;">${toFa(credits)} واحد</span>`;
         html += ` (کف: ${toFa(maxUnits)} / سقف: ${toFa(ceiling)})`;
-        html += ` <span style="font-size:10px;color:var(--text-3);">— کارورزی/پروژه مستثنی</span>`;
+        html += ` <span style="font-size:10px;color:var(--text-3);">— کارآموزی/پروژه مستثنی</span>`;
     }
     document.getElementById('course-count-display').innerHTML = html;
 }
@@ -1223,14 +1223,14 @@ async function submitCoursePicker() {
         return;
     }
 
-    // اعتبارسنجی تعداد واحد (کارورزی/پروژه مستثنی) — کنترل کف و سقف
+    // اعتبارسنجی تعداد واحد (کارآموزی/پروژه مستثنی) — کنترل کف و سقف
     const totalCredits = getTotalCredits();
     if (maxUnits > 0 && totalCredits > ceiling) {
-        alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) بیشتر از سقف مجاز (${toFa(ceiling)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)\nلطفاً دروس کمتری انتخاب کنید.`);
+        alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) بیشتر از سقف مجاز (${toFa(ceiling)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\n(دروس کارآموزی و پروژه در محاسبه لحاظ نمی‌شوند)\nلطفاً دروس کمتری انتخاب کنید.`);
         return;
     }
     if (maxUnits > 0 && totalCredits < maxUnits) {
-        alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) کمتر از کف مجاز (${toFa(maxUnits)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\n(دروس کارورزی و پروژه در محاسبه لحاظ نمی‌شوند)\nلطفاً دروس بیشتری انتخاب کنید تا حداقل به کف (${toFa(maxUnits)} واحد) برسید.`);
+        alert(`⚠️ مجموع واحدهای انتخابی (${toFa(totalCredits)} واحد) کمتر از کف مجاز (${toFa(maxUnits)} واحد) است.\n\nکف: ${toFa(maxUnits)} واحد\nسقف: ${toFa(ceiling)} واحد\n(دروس کارآموزی و پروژه در محاسبه لحاظ نمی‌شوند)\nلطفاً دروس بیشتری انتخاب کنید تا حداقل به کف (${toFa(maxUnits)} واحد) برسید.`);
         return;
     }
 
@@ -1248,7 +1248,7 @@ async function submitCoursePicker() {
         confirmMsg += `✅ بدون تغییر (${toFa(unchangedNames.length)}): ${unchangedNames.join('، ')}\n`;
     }
     if (maxUnits > 0) {
-        confirmMsg += `\n📊 مجموع واحدها: ${toFa(totalCredits)} (کف: ${toFa(maxUnits)} / سقف: ${toFa(ceiling)}) — کارورزی/پروژه مستثنی`;
+        confirmMsg += `\n📊 مجموع واحدها: ${toFa(totalCredits)} (کف: ${toFa(maxUnits)} / سقف: ${toFa(ceiling)}) — کارآموزی/پروژه مستثنی`;
         if (desiredUnitsVal !== null) {
             confirmMsg += `\n🎯 تعداد واحد مطلوب برای تدریس: ${toFa(desiredUnitsVal)} واحد`;
         }

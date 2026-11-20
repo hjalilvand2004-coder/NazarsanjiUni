@@ -1470,7 +1470,7 @@ def api_teaching_preferences_bulk():
             added = 0
             for item in items:
                 name = item.get("course_name") or ""
-                if "کارورزی" in name or "پروژه" in name:
+                if "کارآموزی" in name or "پروژه" in name:
                     continue
                 code = prefs_module.normalize_code(item.get("unique_course_code") or "")
                 if code in existing_codes:
@@ -1479,9 +1479,9 @@ def api_teaching_preferences_bulk():
             final_total = current_total + added
             ceiling = max_units
             if max_units > 0 and final_total > ceiling:
-                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) بیشتر از سقف مجاز ({ceiling} واحد) است. کف: {min_units} / سقف: {ceiling} واحد (کارورزی/پروژه مستثنی)."}), 400
+                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) بیشتر از سقف مجاز ({ceiling} واحد) است. کف: {min_units} / سقف: {ceiling} واحد (کارآموزی/پروژه مستثنی)."}), 400
             if final_total < min_units:
-                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) کمتر از کف مجاز ({min_units} واحد) است. حداقل {min_units} واحد باید انتخاب کنید (کارورزی/پروژه مستثنی)."}), 400
+                return jsonify({"ok": False, "error": f"مجموع واحدهای شما ({final_total} واحد) کمتر از کف مجاز ({min_units} واحد) است. حداقل {min_units} واحد باید انتخاب کنید (کارآموزی/پروژه مستثنی)."}), 400
     created_ids = []
     errors = []
     skipped_duplicates = 0

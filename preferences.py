@@ -1135,7 +1135,7 @@ def get_course_credits(db, unique_code, credits_map=None):
 
 
 def get_instructor_total_credits(db, instructor_code, exclude_pref_id=None, credits_map=None):
-    """مجموع واحدهای مطلوبیت‌های تدریس یک استاد (دروس کارورزی/پروژه مستثنی).
+    """مجموع واحدهای مطلوبیت‌های تدریس یک استاد (دروس کارآموزی/پروژه مستثنی).
     اگر exclude_pref_id داده شود، آن رکورد از محاسبه خارج می‌شود (پیش‌بینی وضعیت پس از حذف)."""
     ensure_preferences_tables(db)
     code = normalize_instructor_code(instructor_code)
@@ -1153,7 +1153,7 @@ def get_instructor_total_credits(db, instructor_code, exclude_pref_id=None, cred
     for r in (rows or []):
         d = dict(r) if not isinstance(r, dict) else r   # [v3.19.6] sqlite3.Row → dict
         name = d.get("course_name") or ""
-        if "کارورزی" in name or "پروژه" in name:
+        if "کارآموزی" in name or "پروژه" in name:
             continue
         uc = normalize_code(d.get("unique_course_code") or "")
         total += credits_map.get(uc, 0)
