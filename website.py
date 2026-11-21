@@ -438,16 +438,46 @@ def instructor_login():
     return render_template("instructor/login.html")
 
 
+def _generate_unique_instructor_code(db):
+    """[v3.19.8] تولید کد استاد عددی یکتا (بزرگ‌ترین کد عددی موجود + ۱).
+    کاربر کد را وارد نمی‌کند؛ خودکار و یونیک تولید می‌شود."""
+    base = 10000
+    try:
+        rows = db.execute_query("SELECT code FROM instructors WHERE code GLOB '[0-9]*'")
+        max_n = 0
+        for r in (rows or []):
+            try:
+                v = int(str(dict(r).get("code") or "").strip())
+                if v > max_n:
+                    max_n = v
+            except Exception:
+                continue
+        base = max(base, max_n + 1)
+    except Exception:
+        pass
+    # تضمین یکتایی در برابر کدهای غیرعددی یا تداخل
+    for _ in range(200):
+        try:
+            exists = db.execute_query("SELECT 1 FROM instructors WHERE code = ?", (str(base),))
+            if not exists:
+                return str(base)
+        except Exception:
+            pass
+        base += 1
+    return str(base)
+
+
 @app.route("/instructor/register", methods=["GET", "POST"])
 def instructor_register():
-    """ثبت‌نام استاد جدید (با تأیید ادمین)."""
+    """ثبت‌نام استاد جدید — نوشتن همزمان در جدول کاربران (authorized_users)
+    و جدول اساتید (instructors). کد استاد خودکار و یکتا تولید می‌شود
+    و کف/سقف/واحد موردنظر از نوع همکاری استخراج می‌گردد."""
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
         full_name = (request.form.get("full_name") or "").strip()
         email = (request.form.get("email") or "").strip()
-        instructor_code = (request.form.get("instructor_code") or "").strip()
         expert_group = (request.form.get("expert_group") or "").strip()
         cooperation_type = (request.form.get("cooperation_type") or "").strip()
 
@@ -463,45 +493,65 @@ def instructor_register():
             flash("رمز عبور و تأییدیه آن یکسان نیستند.", "error")
             return render_template("instructor/register.html")
 
-        # بررسی تکراری نبودن username
-        existing = db.get_admin_by_username(username)
-        if existing:
+        # نرمال‌سازی ارقام (مطابق منطق ورود) تا تطبیق student_number درست انجام شود
+        username_norm = helpers.normalize_digits(username)
+
+        # بررسی تکراری نبودن username در جدول کاربران (authorized_users)
+        if db.get_user_by_student_number(username_norm):
             flash("این نام کاربری قبلاً ثبت شده است.", "error")
             return render_template("instructor/register.html")
 
-        # ساخت استاد جدید (به‌صورت غیرفعال تا ادمین تأیید کند)
-        ok = db.create_admin(
-            username=username,
-            password=password,
-            full_name=full_name,
-            email=email,
-            role="instructor",
-        )
-        if not ok:
-            flash("خطا در ثبت‌نام.", "error")
+        # [v3.19.8] کد استاد خودکار و یکتا (عددی) — کاربر وارد نمی‌کند
+        instructor_code = _generate_unique_instructor_code(db)
+
+        # ۱) جدول اساتید (instructors): کف/سقف/واحد موردنظر از نوع همکاری
+        #    به‌صورت خودکار توسط create_instructor (get_units_rule) تنظیم می‌شود.
+        inst_id = None
+        if INSTRUCTORS_AVAILABLE:
+            try:
+                inst_id, inst_err = instructors_module.create_instructor(db, {
+                    "code": instructor_code,
+                    "username": username,
+                    "full_name": full_name,
+                    "email": email,
+                    "group": expert_group,
+                    "cooperation_type": cooperation_type,
+                    "password": password,
+                    "source": "self_register",
+                })
+            except Exception as e:
+                inst_err = str(e)
+            if inst_err:
+                print(f"instructor create_instructor error: {inst_err}")
+                flash("خطا در ثبت استاد در جدول اساتید.", "error")
+                return render_template("instructor/register.html")
+
+        # ۲) جدول کاربران (authorized_users): مسیر ورود استاد (login این جدول را می‌خواند)
+        #    الگوی INSERT منطبق با sync_instructors_to_users (مقاوم در برابر محدودیت‌های UNIQUE)
+        try:
+            phone = username_norm  # استاد شماره ندارد؛ username یکتا به‌عنوان phone به‌کار می‌رود
+            db.execute_query(
+                '''INSERT INTO authorized_users
+                   (name, display_phone, normalized_phone, student_number,
+                    student_type, role, first_channel, password_hash, user_type, is_blocked)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)''',
+                (full_name or username, phone, phone, username_norm,
+                 "ناپیوسته", "instructor", "instructor_register",
+                 hash_password(password), "instructor")
+            )
+        except Exception as e:
+            print(f"instructor authorized_users insert error: {e}")
+            # rollback: رکورد استاد را که در جدول instructors ساخته بودیم حذف کن.
+            # بر اساس code که می‌دانیم حذف می‌کنیم (نه last_insert_rowid که بین
+            # کانکشن‌های مجزا قابل اتکا نیست).
+            try:
+                db.execute_query("DELETE FROM instructors WHERE code = ?", (instructor_code,))
+            except Exception:
+                pass
+            flash("خطا در ثبت کاربر.", "error")
             return render_template("instructor/register.html")
 
-        # ذخیره اطلاعات اضافی استاد در فایل mirror (بدون تغییر دیتابیس)
-        import json
-        instructor_extra_file = app_path("instructor_profiles.json")
-        try:
-            data = {}
-            if os.path.exists(instructor_extra_file):
-                with open(instructor_extra_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            data[username] = {
-                "instructor_code": instructor_code,
-                "expert_group": expert_group,
-                "cooperation_type": cooperation_type,
-                "registered_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            }
-            with open(instructor_extra_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"instructor profile save error: {e}")
-
-        # فعال‌سازی خودکار اگر اولین استاد بود (یا باید ادمین تأیید کند)
-        flash("ثبت‌نام شما با موفقیت انجام شد. ادمین سامانه باید حساب شما را فعال کند.", "success")
+        flash(f"ثبت‌نام شما با موفقیت انجام شد. کد استاد شما: {instructor_code}. ادمین سامانه باید حساب شما را فعال کند.", "success")
         return redirect(url_for("instructor_login"))
 
     return render_template("instructor/register.html")

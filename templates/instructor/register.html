@@ -6,6 +6,16 @@
     <title>ثبت‌نام استاد | سامانه نظرسنجی دروس</title>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('serve_admin_static', path='style.css') }}?v={{ APP_VERSION }}">
+    <style>
+        /* [v3.19.8] رفع نمایش سفید‌روی‌سفید کامبوباکس نوع همکاری در تم تیره.
+           فقط محدود به همین صفحه — به CSS سراسری (سایر صفحات) دست نمی‌زنیم. */
+        select.form-select,
+        select.form-select option,
+        select.form-select optgroup {
+            color: #0f172a;
+            background: #ffffff;
+        }
+    </style>
 </head>
 <body>
     <div class="login-page">
@@ -35,10 +45,7 @@
                     <label class="form-label">نام کاربری *</label>
                     <input type="text" name="username" class="form-input" required dir="ltr" style="text-align:right;">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">کد استاد</label>
-                    <input type="text" name="instructor_code" class="form-input" dir="ltr" style="text-align:right;">
-                </div>
+                <!-- [v3.19.8] کد استاد خودکار و یکتا تولید می‌شود — فیلد ورودی حذف شد -->
                 <div class="form-group">
                     <label class="form-label">گروه تخصصی</label>
                     <input type="text" name="expert_group" class="form-input" placeholder="مثلاً مهندسی کامپیوتر">
@@ -49,10 +56,9 @@
                         <option value="">انتخاب کنید...</option>
                         <option value="هیات علمی">هیات علمی</option>
                         <option value="دستیارآموزشی">دستیارآموزشی</option>
-                        <option value="هیات علمی وابسته">هیات علمی وابسته</option>
                         <option value="حق التدریس">حق التدریس</option>
+                        <option value="هیات علمی وابسته">هیات علمی وابسته</option>
                         <option value="هیات علمی مامور">هیات علمی مامور</option>
-                        <option value="سایر">سایر</option>
                     </select>
                 </div>
                 <div class="form-group">
