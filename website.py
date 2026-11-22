@@ -1942,6 +1942,38 @@ def api_instructors_create():
     return jsonify({"ok": True, "id": inst_id})
 
 
+def _sync_instructor_password_to_users(db, password, *usernames):
+    """[v3.19.9] همگام‌سازی رمز عبور استاد به جدول کاربران (authorized_users).
+    وقتی ادمین رمز استاد را در مودال ویرایش تغییر می‌دهد، رمز کاربر متناظر
+    (که ورود استاد از آن خوانده می‌شود) هم به‌روز می‌شود.
+    تطبیق با username خام و نرمال‌شده (قدیمی/جدید) تا همه‌ی حالت‌ها پوشش داده شوند.
+    فقط password_hash را آپدیت می‌کند — هیچ فیلد/رکورد دیگری دست نمی‌خورد."""
+    candidates = []
+    for u in usernames:
+        u = (u or "").strip()
+        if not u:
+            continue
+        if u not in candidates:
+            candidates.append(u)
+        try:
+            nu = helpers.normalize_digits(u)
+            if nu and nu not in candidates:
+                candidates.append(nu)
+        except Exception:
+            pass
+    if not candidates:
+        return
+    pw_hash = hash_password(password)
+    for sn in candidates:
+        try:
+            db.execute_query(
+                "UPDATE authorized_users SET password_hash = ? WHERE student_number = ?",
+                (pw_hash, sn)
+            )
+        except Exception as e:
+            print(f"instructor password sync to authorized_users ({sn}) error: {e}")
+
+
 @app.route("/api/instructors/<int:inst_id>", methods=["PUT"])
 @admin_or_instructor_required
 def api_instructors_update(inst_id):
@@ -1949,11 +1981,22 @@ def api_instructors_update(inst_id):
     if not INSTRUCTORS_AVAILABLE:
         return jsonify({"ok": False, "error": "module_unavailable"}), 503
     data = request.get_json(silent=True) or {}
+    # [v3.19.9] username فعلی (قبل از آپدیت) را برای همگام‌سازی رمز به authorized_users نگه می‌داریم
+    old_username = ""
+    if data.get("password"):
+        cur = db.execute_query("SELECT username FROM instructors WHERE id = ?", (inst_id,))
+        if cur:
+            old_username = str(dict(cur[0]).get("username") or "").strip()
     ok, err = instructors_module.update_instructor(db, inst_id, data)
     if not ok or err:
         if err and "پیدا نشد" in err:
             return jsonify({"ok": False, "error": "استاد پیدا نشد"}), 404
         return jsonify({"ok": False, "error": err or "خطای ناشناخته هنگام ویرایش استاد"}), 500
+    # [v3.19.9] اگر رمز تغییر کرده، رمز کاربر متناظر در authorized_users را هم به‌روز کن
+    new_password = (data.get("password") or "").strip()
+    if new_password:
+        new_username = str(data.get("username") or "").strip()
+        _sync_instructor_password_to_users(db, new_password, old_username, new_username)
     audit_log("instructor_update", description=f"ویرایش استاد #{inst_id}")
     return jsonify({"ok": True})
 
