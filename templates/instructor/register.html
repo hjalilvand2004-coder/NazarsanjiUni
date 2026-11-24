@@ -43,7 +43,10 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">شماره تلفن همراه (نام کاربری) *</label>
-                    <input type="text" name="username" class="form-input" required dir="ltr" style="text-align:right;">
+                    <input type="text" name="username" id="regUsername" class="form-input" required dir="ltr" inputmode="numeric" maxlength="11" pattern="0[0-9]{10}" style="text-align:right;" placeholder="09123456789" autocomplete="off">
+                    <small id="usernameHint" style="color:var(--text-3);font-size:11px;display:block;margin-top:4px;">
+                        ۱۱ رقم، شروع با ۰ — مثال: 09123456789
+                    </small>
                 </div>
                 <!-- [v3.19.8] کد استاد خودکار و یکتا تولید می‌شود — فیلد ورودی حذف شد -->
                 <div class="form-group">
@@ -96,6 +99,46 @@
     var confirmHint = document.getElementById('confirmHint');
     var form = document.getElementById('registerForm');
 
+    // [v3.19.10] اعتبارسنجی شماره تلفن همراه (نام کاربری): فقط عدد، ۱۱ رقم، شروع با ۰
+    var phoneInput = document.getElementById('regUsername');
+    var phoneHint = document.getElementById('usernameHint');
+    var D = {'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9',
+             '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
+    function toLatin(s){ return String(s).replace(/[۰-۹٠-٩]/g, function(c){ return D[c]||c; }); }
+    function onlyDigits(s){ return toLatin(s).replace(/\D/g, ''); }
+    function validPhone(v){ return /^0\d{10}$/.test(v); }
+    function checkPhone(){
+        var raw = phoneInput.value;
+        var n = onlyDigits(raw);
+        if (n !== raw){
+            var s = phoneInput.selectionStart, e = phoneInput.selectionEnd;
+            phoneInput.value = n;
+            try { phoneInput.setSelectionRange(s, e); } catch(x){}
+        }
+        if (n.length === 0){
+            phoneHint.textContent = '۱۱ رقم، شروع با ۰ — مثال: 09123456789';
+            phoneHint.style.color = 'var(--text-3)';
+            phoneInput.style.borderColor = '';
+        } else if (n.length < 11){
+            phoneHint.textContent = '✗ تاکنون ' + n.length + ' رقم وارد شده — باید ۱۱ رقم باشد.';
+            phoneHint.style.color = '#ef4444';
+            phoneInput.style.borderColor = '#ef4444';
+        } else if (n.length > 11){
+            phoneHint.textContent = '✗ بیشتر از ۱۱ رقم — شماره موبایل ۱۱ رقم است.';
+            phoneHint.style.color = '#ef4444';
+            phoneInput.style.borderColor = '#ef4444';
+        } else if (n[0] !== '0'){
+            phoneHint.textContent = '✗ شماره باید با ۰ شروع شود.';
+            phoneHint.style.color = '#ef4444';
+            phoneInput.style.borderColor = '#ef4444';
+        } else {
+            phoneHint.textContent = '✓ شماره تلفن همراه معتبر است.';
+            phoneHint.style.color = '#10b981';
+            phoneInput.style.borderColor = '#10b981';
+        }
+    }
+    phoneInput.addEventListener('input', checkPhone);
+
     function checkMatch() {
         var p1 = passwordInput.value;
         var p2 = confirmInput.value;
@@ -117,6 +160,14 @@
     confirmInput.addEventListener('input', checkMatch);
 
     form.addEventListener('submit', function(e) {
+        // [v3.19.10] ابتدا شماره تلفن بررسی شود
+        if (!validPhone(onlyDigits(phoneInput.value))) {
+            e.preventDefault();
+            checkPhone();
+            alert('شماره تلفن همراه (نام کاربری) باید دقیقاً ۱۱ رقم و با صفر شروع شود.');
+            phoneInput.focus();
+            return;
+        }
         if (passwordInput.value !== confirmInput.value) {
             e.preventDefault();
             alert('رمز عبور و تأییدیه آن مطابقت ندارند.');

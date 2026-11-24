@@ -134,21 +134,71 @@
     </div>
 </div>
 
-<!-- د) روند روزانه -->
+<!-- د) روند روزانه ثبت مطلوبیت‌ها (نمودار خطی/منحنی) -->
 <div class="card" style="margin-bottom:20px;">
     <div class="card-header"><div class="card-title">د) روند روزانه ثبت مطلوبیت‌ها</div></div>
     <div style="padding:20px;">
         {% if daily_trend %}
-        <div style="display:flex;gap:4px;align-items:flex-end;height:120px;">
-            {% for day, count in daily_trend %}
-            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                <div style="width:30px;background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:4px 4px 0 0;height:{{ count * 10 }}px;min-height:4px;" title="{{ day }}: {{ count }}"></div>
-                <small style="font-size:9px;color:var(--text-3);">{{ day[5:] }}</small>
-            </div>
-            {% endfor %}
-        </div>
+        <div class="chart-wrap chart-wrap-lg"><canvas id="dailyTrendChart"></canvas></div>
+        <script>
+        (function(){
+            var raw = {{ daily_trend | tojson }};
+            var labels = raw.map(function(d){ return d[0] ? String(d[0]).slice(5) : ''; });
+            var data = raw.map(function(d){ return d[1]; });
+            new Chart(document.getElementById('dailyTrendChart'), {
+                type: 'line',
+                data: { labels: labels, datasets: [{
+                    label: 'تعداد مطلوبیت ثبت‌شده',
+                    data: data,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99,102,241,0.12)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#4f46e5'
+                }]},
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: true, position: 'top', rtl: true } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+        })();
+        </script>
         {% else %}
         <p style="color:var(--text-3);text-align:center;padding:20px;">داده‌ای موجود نیست</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- هـ) اساتید شرکت‌کننده در نظرسنجی -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <div class="card-title">هـ) اساتید شرکت‌کننده در نظرسنجی ({{ participants|length }} نفر)</div>
+        <div style="font-size:12px;color:var(--text-3);">اساتیدی که در مطلوبیت درس یا زمان ثبت کرده‌اند — تعداد درس (بدون کارورزی/پروژه) و تعداد بازه زمانی</div>
+    </div>
+    <div style="padding:20px;">
+        {% if participants %}
+        <div style="overflow-x:auto;">
+        <table class="table">
+            <thead><tr><th>#</th><th>نام استاد</th><th>کد</th><th>نام کاربری</th><th>تعداد درس ثبت‌شده (مطلوبیت درس)</th><th>تعداد بازه زمانی (مطلوبیت زمان)</th></tr></thead>
+            <tbody>
+                {% for p in participants %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ p.name or '—' }}</td>
+                    <td>{{ p.code or '—' }}</td>
+                    <td>{{ p.username or '—' }}</td>
+                    <td><span class="badge badge-primary">{{ p.teaching_count }}</span></td>
+                    <td><span class="badge badge-info">{{ p.time_count }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p style="color:var(--text-3);text-align:center;padding:20px;">هنوز استادی در نظرسنجی شرکت نکرده است.</p>
         {% endif %}
     </div>
 </div>

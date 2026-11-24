@@ -496,9 +496,25 @@ def instructor_register():
         # نرمال‌سازی ارقام (مطابق منطق ورود) تا تطبیق student_number درست انجام شود
         username_norm = helpers.normalize_digits(username)
 
-        # بررسی تکراری نبودن username در جدول کاربران (authorized_users)
-        if db.get_user_by_student_number(username_norm):
-            flash("این نام کاربری قبلاً ثبت شده است.", "error")
+        # [v3.19.10] اعتبارسنجی شماره تلفن همراه: فقط عدد، دقیقاً ۱۱ رقم، شروع با ۰
+        if not (len(username_norm) == 11 and username_norm.isdigit() and username_norm[:1] == "0"):
+            flash("شماره تلفن همراه (نام کاربری) باید دقیقاً ۱۱ رقم و با صفر شروع شود (مثال: 09123456789).", "error")
+            return render_template("instructor/register.html")
+
+        # [v3.19.10] جلوگیری از ثبت تکراری: بررسی نام کاربری/شماره تلفن در جدول
+        # کاربران (normalized_phone و student_number) و جدول اساتید (username).
+        # در جدول اساتید هم شکل خام و هم نرمال‌شده بررسی می‌شود تا حالت‌های
+        # ثبت‌شده با ارقام فارسی/لاتین هر دو پوشش داده شوند.
+        dup_user = db.execute_query(
+            "SELECT id FROM authorized_users WHERE normalized_phone = ? OR student_number = ? LIMIT 1",
+            (username_norm, username_norm)
+        )
+        dup_inst = db.execute_query(
+            "SELECT id FROM instructors WHERE username = ? OR username = ? LIMIT 1",
+            (username, username_norm)
+        )
+        if dup_user or dup_inst:
+            flash("این شماره تلفن همراه قبلاً ثبت شده است. لطفاً از صفحه ورود استفاده کنید یا شماره دیگری وارد کنید.", "error")
             return render_template("instructor/register.html")
 
         # [v3.19.8] کد استاد خودکار و یکتا (عددی) — کاربر وارد نمی‌کند
@@ -3712,6 +3728,57 @@ def admin_preferences_reports():
         if key in heatmap:
             heatmap[key] += 1
     
+    # [v3.19.10] هـ) لیست اساتید شرکت‌کننده در نظرسنجی (مطلوبیت درس + زمان)
+    # تعداد درس ثبت‌شده در مطلوبیت تدریس (بدون کارورزی/پروژه) + تعداد بازه زمانی.
+    teaching_counts = {}
+    try:
+        rows = db.execute_query(
+            '''SELECT instructor_code, MAX(instructor_name) AS name,
+                      MAX(instructor_username) AS username,
+                      COUNT(DISTINCT unique_course_code) AS teaching_count
+               FROM teaching_preferences
+               WHERE COALESCE(course_name,'') NOT LIKE '%کارورزی%'
+                 AND COALESCE(course_name,'') NOT LIKE '%پروژه%'
+               GROUP BY instructor_code'''
+        )
+        for r in (rows or []):
+            r = dict(r) if not isinstance(r, dict) else r
+            code = r.get("instructor_code")
+            if code:
+                teaching_counts[code] = r
+    except Exception as e:
+        print("preferences_reports teaching_counts error:", e)
+
+    time_counts = {}
+    try:
+        rows = db.execute_query(
+            '''SELECT instructor_code, MAX(instructor_name) AS name,
+                      MAX(instructor_username) AS username,
+                      COUNT(*) AS time_count
+               FROM time_preferences
+               GROUP BY instructor_code'''
+        )
+        for r in (rows or []):
+            r = dict(r) if not isinstance(r, dict) else r
+            code = r.get("instructor_code")
+            if code:
+                time_counts[code] = r
+    except Exception as e:
+        print("preferences_reports time_counts error:", e)
+
+    participants = []
+    for code in set(teaching_counts.keys()) | set(time_counts.keys()):
+        t = teaching_counts.get(code, {})
+        tm = time_counts.get(code, {})
+        participants.append({
+            "code": code,
+            "name": t.get("name") or tm.get("name") or "—",
+            "username": t.get("username") or tm.get("username") or "—",
+            "teaching_count": int(t.get("teaching_count") or 0),
+            "time_count": int(tm.get("time_count") or 0),
+        })
+    participants.sort(key=lambda x: (-(x["teaching_count"] + x["time_count"]), str(x["name"])))
+
     return render_template(
         "admin/preferences_reports.html",
         admin=g.admin,
@@ -3727,6 +3794,7 @@ def admin_preferences_reports():
         courses_without_instructor=courses_without_instructor,
         top_times=top_times,
         daily_trend=daily_trend_sorted,
+        participants=participants,
         heatmap=heatmap,
         days=days,
         periods=periods,
