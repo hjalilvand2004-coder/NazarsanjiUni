@@ -501,17 +501,19 @@ def instructor_register():
             flash("شماره تلفن همراه (نام کاربری) باید دقیقاً ۱۱ رقم و با صفر شروع شود (مثال: 09123456789).", "error")
             return render_template("instructor/register.html")
 
-        # [v3.19.10] جلوگیری از ثبت تکراری: بررسی نام کاربری/شماره تلفن در جدول
-        # کاربران (normalized_phone و student_number) و جدول اساتید (username).
-        # در جدول اساتید هم شکل خام و هم نرمال‌شده بررسی می‌شود تا حالت‌های
-        # ثبت‌شده با ارقام فارسی/لاتین هر دو پوشش داده شوند.
+        # [v3.19.11] جلوگیری از ثبت تکراری: بررسی هر دو فرم ۱۱ رقمی (با صفر اول)
+        # و ۱۰ رقمی (بدون صفر اول) در جدول کاربران و اساتید — تا ثبت‌شده با هر دو
+        # حالت شماره تلفن تشخیص داده شود.
+        phone_11 = username_norm
+        phone_10 = username_norm[1:] if username_norm.startswith("0") else username_norm
         dup_user = db.execute_query(
-            "SELECT id FROM authorized_users WHERE normalized_phone = ? OR student_number = ? LIMIT 1",
-            (username_norm, username_norm)
+            "SELECT id FROM authorized_users "
+            "WHERE normalized_phone IN (?, ?) OR student_number IN (?, ?) LIMIT 1",
+            (phone_11, phone_10, phone_11, phone_10)
         )
         dup_inst = db.execute_query(
-            "SELECT id FROM instructors WHERE username = ? OR username = ? LIMIT 1",
-            (username, username_norm)
+            "SELECT id FROM instructors WHERE username IN (?, ?, ?) LIMIT 1",
+            (username, phone_11, phone_10)
         )
         if dup_user or dup_inst:
             flash("این شماره تلفن همراه قبلاً ثبت شده است. لطفاً از صفحه ورود استفاده کنید یا شماره دیگری وارد کنید.", "error")
@@ -571,6 +573,30 @@ def instructor_register():
         return redirect(url_for("instructor_login"))
 
     return render_template("instructor/register.html")
+
+
+@app.route("/instructor/check-phone", methods=["POST"])
+def instructor_check_phone():
+    """[v3.19.11] بررسی لحظه‌ای وجود شماره تلفن در سامانه (با/بدون صفر اول)."""
+    phone = (request.form.get("phone") or request.form.get("username") or "").strip()
+    phone_norm = helpers.normalize_digits(phone)
+    if not (len(phone_norm) == 11 and phone_norm.isdigit() and phone_norm[:1] == "0"):
+        return jsonify({"ok": True, "valid": False, "exists": False})
+    phone_11 = phone_norm
+    phone_10 = phone_norm[1:]
+    dup_user = db.execute_query(
+        "SELECT id FROM authorized_users "
+        "WHERE normalized_phone IN (?, ?) OR student_number IN (?, ?) LIMIT 1",
+        (phone_11, phone_10, phone_11, phone_10)
+    )
+    dup_inst = db.execute_query(
+        "SELECT id FROM instructors WHERE username IN (?, ?, ?) LIMIT 1",
+        (phone, phone_11, phone_10)
+    )
+    if dup_user or dup_inst:
+        return jsonify({"ok": True, "valid": True, "exists": True,
+                        "message": "شما قبلاً با این شماره تلفن در سامانه ثبت‌نام کرده‌اید. لطفاً از صفحهٔ ورود استفاده کنید."})
+    return jsonify({"ok": True, "valid": True, "exists": False})
 
 
 @app.route("/instructor/dashboard")
@@ -3617,6 +3643,68 @@ def admin_preference_periods_reset_responses():
 
 
 # ==================================================
+# ===== [v3.19.11] کمکی‌های گزارش مطلوبیت‌ها =====
+# ==================================================
+def _phone_core(value):
+    """هستهٔ شماره تلفن/نام کاربری: ارقام فارسی→لاتین + حذف صفرهای ابتدا.
+    «09123456789» و «9123456789» هر دو → «9123456789» (تطبیق ۱۰/۱۱ رقمی)."""
+    if not value:
+        return ""
+    n = helpers.normalize_digits(str(value))
+    if n.isdigit():
+        return n.lstrip("0")
+    return str(value).strip()
+
+
+def _name_norm(value):
+    """نرمال‌سازی نام برای تطبیق: حذف فاصله‌های اضافی و نیم‌فاصله."""
+    if not value:
+        return ""
+    return " ".join(str(value).replace("\u200c", " ").split()).strip()
+
+
+def _gregorian_to_jalali(gy, gm, gd):
+    """تبدیل تاریخ میلادی به شمسی (الگوریتم استاندارد، بدون وابستگی خارجی)."""
+    g_days = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    j_days = [0, 31, 62, 93, 124, 155, 186, 216, 246, 276, 306, 336]
+    gy -= 1600
+    gm -= 1
+    gd -= 1
+    g_day_no = (365 * gy + (gy + 3) // 4 - (gy + 99) // 100 + (gy + 399) // 400
+                + g_days[gm] + gd)
+    if gm > 1 and ((gy % 4 == 0 and gy % 100 != 0) or (gy % 400 == 0)):
+        g_day_no += 1
+    j_day_no = g_day_no - 79
+    j_np = j_day_no // 12053
+    j_day_no %= 12053
+    jy = 979 + 33 * j_np + 4 * (j_day_no // 1461)
+    j_day_no %= 1461
+    if j_day_no >= 366:
+        jy += (j_day_no - 1) // 365
+        j_day_no = (j_day_no - 1) % 365
+    for i in range(11):
+        if j_day_no < j_days[i + 1]:
+            break
+    else:
+        i = 11
+    jm = i + 1
+    jd = j_day_no - j_days[i] + 1
+    return jy, jm, jd
+
+
+def _to_jalali_iso(gregorian_iso):
+    """«YYYY-MM-DD» میلادی → «YYYY-MM-DD» شمسی (برای برچسب نمودار و مرتب‌سازی)."""
+    try:
+        parts = str(gregorian_iso).strip().split("-")
+        if len(parts) < 3:
+            return str(gregorian_iso)
+        jy, jm, jd = _gregorian_to_jalali(int(parts[0]), int(parts[1]), int(parts[2]))
+        return f"{jy:04d}-{jm:02d}-{jd:02d}"
+    except Exception:
+        return str(gregorian_iso)
+
+
+# ==================================================
 # ===== [v3.13.0] گزارش‌های مطلوبیت‌ها =====
 # ==================================================
 @app.route("/admin/preferences-reports")
@@ -3653,9 +3741,24 @@ def admin_preferences_reports():
     instructors_with_any = instructors_with_teaching | instructors_with_time
     instructors_without = total_instructors - len(instructors_with_any)
 
-    # [v3.19] لیست اساتید بدون ثبت مطلوبیت (نام + نوع همکاری + گروه) — فقط ادمین
+    # [v3.19.11] لیست اساتید بدون ثبت مطلوبیت — تطبیق هوشمند:
+    #   ۱) کد دقیق ؛ ۲) هستهٔ شماره (با/بدون صفر اول) ؛ ۳) نام و نام خانوادگی → لیست مشکوک.
     non_submitters = []
+    suspicious = []
     if is_admin and INSTRUCTORS_AVAILABLE:
+        submitted_codes = set()
+        submitted_phones = set()
+        submitted_names = set()
+        for p in teaching_items + time_items:
+            ic = p.get("instructor_code")
+            if ic:
+                submitted_codes.add(str(ic))
+            pc = _phone_core(p.get("instructor_username"))
+            if pc:
+                submitted_phones.add(pc)
+            nm = _name_norm(p.get("instructor_name"))
+            if nm:
+                submitted_names.add(nm)
         try:
             inst_rows = db.execute_query(
                 'SELECT code, username, full_name, cooperation_type, "group" '
@@ -3663,13 +3766,23 @@ def admin_preferences_reports():
             ) or []
             for r in inst_rows:
                 r = dict(r) if not isinstance(r, dict) else r
-                code = r.get("code")
-                uname = r.get("username")
-                if (code and code in instructors_with_any) or (uname and uname in instructors_with_any):
+                code = str(r.get("code") or "")
+                uname = r.get("username") or ""
+                full_name = r.get("full_name") or ""
+                uname_core = _phone_core(uname)
+                # تطبیق ثبت‌شده: کد دقیق یا هستهٔ شماره (۱۰/۱۱ رقمی)
+                matched = (code and code in submitted_codes) or \
+                          (uname_core and uname_core in submitted_phones)
+                if matched:
                     continue
-                non_submitters.append(r)
+                # تطبیق مشکوک: نام با ثبت‌کننده‌ای تطبیق دارد ولی کد/نام‌کاربری نه
+                if _name_norm(full_name) and _name_norm(full_name) in submitted_names:
+                    suspicious.append(r)
+                else:
+                    non_submitters.append(r)
         except Exception:
             non_submitters = []
+            suspicious = []
     
     # ب) فراوانی درس‌ها
     course_freq = {}
@@ -3707,7 +3820,7 @@ def admin_preferences_reports():
     for p in teaching_items + time_items:
         created = p.get("created_at") or ""
         if created:
-            day = created[:10]
+            day = _to_jalali_iso(created[:10])  # [v3.19.11] میلادی → شمسی
             daily_trend[day] = daily_trend.get(day, 0) + 1
     
     daily_trend_sorted = sorted(daily_trend.items())
@@ -3735,6 +3848,7 @@ def admin_preferences_reports():
         rows = db.execute_query(
             '''SELECT instructor_code, MAX(instructor_name) AS name,
                       MAX(instructor_username) AS username,
+                      MAX(cooperation_type) AS cooperation_type,
                       COUNT(DISTINCT unique_course_code) AS teaching_count
                FROM teaching_preferences
                WHERE COALESCE(course_name,'') NOT LIKE '%کارورزی%'
@@ -3754,6 +3868,7 @@ def admin_preferences_reports():
         rows = db.execute_query(
             '''SELECT instructor_code, MAX(instructor_name) AS name,
                       MAX(instructor_username) AS username,
+                      MAX(cooperation_type) AS cooperation_type,
                       COUNT(*) AS time_count
                FROM time_preferences
                GROUP BY instructor_code'''
@@ -3774,6 +3889,7 @@ def admin_preferences_reports():
             "code": code,
             "name": t.get("name") or tm.get("name") or "—",
             "username": t.get("username") or tm.get("username") or "—",
+            "cooperation_type": t.get("cooperation_type") or tm.get("cooperation_type") or "—",
             "teaching_count": int(t.get("teaching_count") or 0),
             "time_count": int(tm.get("time_count") or 0),
         })
@@ -3784,6 +3900,7 @@ def admin_preferences_reports():
         admin=g.admin,
         is_admin=is_admin,
         non_submitters=non_submitters,
+        suspicious=suspicious,
         total_instructors=total_instructors,
         instructors_with_teaching=len(instructors_with_teaching),
         instructors_with_time=len(instructors_with_time),

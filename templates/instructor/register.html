@@ -100,14 +100,42 @@
     var form = document.getElementById('registerForm');
 
     // [v3.19.10] اعتبارسنجی شماره تلفن همراه (نام کاربری): فقط عدد، ۱۱ رقم، شروع با ۰
+    // [v3.19.11] + بررسی لحظه‌ای وجود شماره در سامانه (با/بدون صفر اول) از طریق AJAX
     var phoneInput = document.getElementById('regUsername');
     var phoneHint = document.getElementById('usernameHint');
+    var phoneExists = false;
+    var phoneTimer = null;
     var D = {'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9',
              '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
     function toLatin(s){ return String(s).replace(/[۰-۹٠-٩]/g, function(c){ return D[c]||c; }); }
     function onlyDigits(s){ return toLatin(s).replace(/\D/g, ''); }
     function validPhone(v){ return /^0\d{10}$/.test(v); }
+
+    function checkPhoneExists(){
+        var val = onlyDigits(phoneInput.value);
+        if (!validPhone(val)) { phoneExists = false; return; }
+        var fd = new FormData();
+        fd.append('phone', val);
+        fetch('{{ url_for("instructor_check_phone") }}', {method: 'POST', body: fd})
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d && d.exists) {
+                    phoneExists = true;
+                    phoneHint.textContent = '✗ ' + (d.message || 'این شماره قبلاً در سامانه ثبت‌شده است.');
+                    phoneHint.style.color = '#ef4444';
+                    phoneInput.style.borderColor = '#ef4444';
+                } else if (validPhone(onlyDigits(phoneInput.value))) {
+                    phoneExists = false;
+                    phoneHint.textContent = '✓ شماره تلفن همراه معتبر و قابل‌ثبت است.';
+                    phoneHint.style.color = '#10b981';
+                    phoneInput.style.borderColor = '#10b981';
+                }
+            })
+            .catch(function(){ /* خاموش — گارد سرور نیز موجود است */ });
+    }
+
     function checkPhone(){
+        if (phoneTimer) { clearTimeout(phoneTimer); phoneTimer = null; }
         var raw = phoneInput.value;
         var n = onlyDigits(raw);
         if (n !== raw){
@@ -116,25 +144,32 @@
             try { phoneInput.setSelectionRange(s, e); } catch(x){}
         }
         if (n.length === 0){
+            phoneExists = false;
             phoneHint.textContent = '۱۱ رقم، شروع با ۰ — مثال: 09123456789';
             phoneHint.style.color = 'var(--text-3)';
             phoneInput.style.borderColor = '';
         } else if (n.length < 11){
+            phoneExists = false;
             phoneHint.textContent = '✗ تاکنون ' + n.length + ' رقم وارد شده — باید ۱۱ رقم باشد.';
             phoneHint.style.color = '#ef4444';
             phoneInput.style.borderColor = '#ef4444';
         } else if (n.length > 11){
+            phoneExists = false;
             phoneHint.textContent = '✗ بیشتر از ۱۱ رقم — شماره موبایل ۱۱ رقم است.';
             phoneHint.style.color = '#ef4444';
             phoneInput.style.borderColor = '#ef4444';
         } else if (n[0] !== '0'){
+            phoneExists = false;
             phoneHint.textContent = '✗ شماره باید با ۰ شروع شود.';
             phoneHint.style.color = '#ef4444';
             phoneInput.style.borderColor = '#ef4444';
         } else {
-            phoneHint.textContent = '✓ شماره تلفن همراه معتبر است.';
-            phoneHint.style.color = '#10b981';
-            phoneInput.style.borderColor = '#10b981';
+            // فرمت معتبر → بررسی وجود در سامانه (با تأخیر)
+            phoneExists = false;
+            phoneHint.textContent = '… در حال بررسی وجود شماره در سامانه …';
+            phoneHint.style.color = 'var(--text-3)';
+            phoneInput.style.borderColor = '';
+            phoneTimer = setTimeout(checkPhoneExists, 500);
         }
     }
     phoneInput.addEventListener('input', checkPhone);
@@ -160,11 +195,18 @@
     confirmInput.addEventListener('input', checkMatch);
 
     form.addEventListener('submit', function(e) {
-        // [v3.19.10] ابتدا شماره تلفن بررسی شود
+        // [v3.19.10] ابتدا فرمت شماره تلفن بررسی شود
         if (!validPhone(onlyDigits(phoneInput.value))) {
             e.preventDefault();
             checkPhone();
             alert('شماره تلفن همراه (نام کاربری) باید دقیقاً ۱۱ رقم و با صفر شروع شود.');
+            phoneInput.focus();
+            return;
+        }
+        // [v3.19.11] اگر شماره قبلاً ثبت‌شده است، جلوی ثبت گرفته شود
+        if (phoneExists) {
+            e.preventDefault();
+            alert('این شماره تلفن همراه قبلاً در سامانه ثبت‌شده است. لطفاً از صفحهٔ ورود استفاده کنید.');
             phoneInput.focus();
             return;
         }

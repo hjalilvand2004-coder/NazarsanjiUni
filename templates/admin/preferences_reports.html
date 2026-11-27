@@ -58,7 +58,7 @@
 <!-- [v3.19] اساتید بدون ثبت مطلوبیت — فقط ادمین -->
 <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
-        <div class="card-title">الف‌ب) اساتید بدون ثبت مطلوبیت ({{ non_submitters|length }} نفر)</div>
+        <div class="card-title">الف) اساتید بدون ثبت مطلوبیت ({{ non_submitters|length }} نفر)</div>
         <div style="font-size:12px;color:var(--text-3);">اساتیدی که هنوز مطلوبیت تدریس یا زمان ثبت نکرده‌اند • <a href="{{ url_for('admin_preferences_export_non_submitters') }}" class="btn btn-ghost btn-sm" style="display:inline-flex;">📥 خروجی اکسل</a></div>
     </div>
     <div style="padding:20px;">
@@ -83,6 +83,35 @@
         {% else %}
         <p style="color:var(--success);text-align:center;padding:20px;">✅ همه‌ی اساتید مطلوبیت ثبت کرده‌اند.</p>
         {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if is_admin and suspicious %}
+<!-- [v3.19.11] اساتید مشکوک به ثبت — تطبیق با نام ولی بدون تطبیق نام کاربری/کد -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <div class="card-title">اساتید مشکوک به ثبت ({{ suspicious|length }} نفر)</div>
+        <div style="font-size:12px;color:var(--warning);">نام با ثبت‌کننده‌ای تطبیق دارد ولی نام کاربری/کد تطبیق ندارد — احتمالاً با نام کاربری متفاوت ثبت کرده‌اند</div>
+    </div>
+    <div style="padding:20px;">
+        <div style="overflow-x:auto;">
+        <table class="table">
+            <thead><tr><th>#</th><th>نام استاد</th><th>کد</th><th>نام کاربری</th><th>نوع همکاری</th><th>گروه</th></tr></thead>
+            <tbody>
+                {% for ns in suspicious %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ ns.full_name or '—' }}</td>
+                    <td>{{ ns.code or '—' }}</td>
+                    <td>{{ ns.username or '—' }}</td>
+                    <td>{{ ns.cooperation_type or '—' }}</td>
+                    <td>{{ ns.group or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -139,7 +168,7 @@
     <div class="card-header"><div class="card-title">د) روند روزانه ثبت مطلوبیت‌ها</div></div>
     <div style="padding:20px;">
         {% if daily_trend %}
-        <div class="chart-wrap chart-wrap-lg"><canvas id="dailyTrendChart"></canvas></div>
+        <div class="chart-wrap chart-wrap-lg" style="width:100%;"><canvas id="dailyTrendChart" style="display:block;"></canvas></div>
         <script>
         (function(){
             var raw = {{ daily_trend | tojson }};
@@ -160,6 +189,7 @@
                 }]},
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: { legend: { display: true, position: 'top', rtl: true } },
                     scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                 }
@@ -182,7 +212,7 @@
         {% if participants %}
         <div style="overflow-x:auto;">
         <table class="table">
-            <thead><tr><th>#</th><th>نام استاد</th><th>کد</th><th>نام کاربری</th><th>تعداد درس ثبت‌شده (مطلوبیت درس)</th><th>تعداد بازه زمانی (مطلوبیت زمان)</th></tr></thead>
+            <thead><tr><th>#</th><th>نام استاد</th><th>کد</th><th>نام کاربری</th><th>نوع همکاری</th><th>تعداد درس ثبت‌شده (مطلوبیت درس)</th><th>تعداد بازه زمانی (مطلوبیت زمان)</th></tr></thead>
             <tbody>
                 {% for p in participants %}
                 <tr>
@@ -190,6 +220,7 @@
                     <td>{{ p.name or '—' }}</td>
                     <td>{{ p.code or '—' }}</td>
                     <td>{{ p.username or '—' }}</td>
+                    <td>{{ p.cooperation_type or '—' }}</td>
                     <td><span class="badge badge-primary">{{ p.teaching_count }}</span></td>
                     <td><span class="badge badge-info">{{ p.time_count }}</span></td>
                 </tr>
