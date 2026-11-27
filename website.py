@@ -384,18 +384,34 @@ def instructor_login():
         # نرمال‌سازی ارقام فارسی/عربی -> لاتین (مستقل از وضعیت کیبورد کاربر)
         username_norm = helpers.normalize_digits(username)
 
-        # جستجو در authorized_users (اساتید از طریق sync_to_users اینجا اضافه می‌شوند)
-        # اول با student_number (که همان username است)
-        user = db.get_user_by_student_number(username_norm)
-        # اگر پیدا نشد، با phone جستجو کن
-        if not user:
+        # [v3.19.12] ورود فقط با شماره تلفن همراه (۱۱ رقم با صفر یا ۱۰ رقم بدون صفر).
+        # صفر اول نباید مانع ورود شود: هر دو فرم بررسی می‌شود به‌ترتیبِ فرم واردشده.
+        phone_11 = phone_10 = None
+        if len(username_norm) == 11 and username_norm.isdigit() and username_norm[:1] == "0":
+            phone_11, phone_10 = username_norm, username_norm[1:]
+        elif len(username_norm) == 10 and username_norm.isdigit() and username_norm[:1] != "0":
+            phone_10, phone_11 = username_norm, "0" + username_norm
+        else:
+            flash("نام کاربری باید شماره تلفن همراه باشد (۱۱ رقم با صفر یا ۱۰ رقم بدون صفر).", "error")
+            return render_template("instructor/login.html")
+
+        # ترتیب جستجو: ابتدا فرمی که کاربر وارد کرده، سپس فرم دیگر.
+        forms = [phone_11, phone_10] if username_norm == phone_11 else [phone_10, phone_11]
+        user = None
+        for frm in forms:
+            u = db.get_user_by_student_number(frm)
+            if u:
+                user = u
+                break
             try:
                 rows = db.execute_query(
-                    "SELECT * FROM authorized_users WHERE display_phone = ? OR normalized_phone = ?",
-                    (username_norm, username_norm)
+                    "SELECT * FROM authorized_users "
+                    "WHERE student_number = ? OR display_phone = ? OR normalized_phone = ? LIMIT 1",
+                    (frm, frm, frm)
                 )
                 if rows:
                     user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+                    break
             except Exception:
                 pass
 
