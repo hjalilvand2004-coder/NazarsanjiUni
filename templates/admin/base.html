@@ -182,6 +182,16 @@
                 {% endfor %}
             {% endwith %}
 
+            {% if instructor_impersonating %}
+            <div style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:10px 14px;border-radius:10px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:0 4px 12px rgba(217,119,6,0.25);">
+                <div style="font-size:13px;font-weight:600;line-height:1.7;">
+                    🎭 ایفای نقش فعال — شما با هویت استاد «{{ impersonated_name }}» وارد شده‌اید.<br>
+                    <span style="font-weight:400;opacity:.95;">ادمین اصلی: {{ impersonator_name }} — برای پشتیبانی؛ همهٔ اقدامات در لاگ ثبت می‌شود.</span>
+                </div>
+                <a href="{{ url_for('admin_stop_impersonation') }}" class="btn" style="background:#fff;color:#b45309;font-weight:700;white-space:nowrap;">← بازگشت به حساب مدیر</a>
+            </div>
+            {% endif %}
+
             {% block content %}{% endblock %}
         </main>
     </div>

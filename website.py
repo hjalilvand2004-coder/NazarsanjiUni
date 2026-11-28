@@ -147,6 +147,12 @@ def inject_globals():
         "sso_enabled": sso_module.is_enabled() if SSO_AVAILABLE else False,
         "sso_button_label": (sso_module.load_settings().get("button_label") if SSO_AVAILABLE else ""),
         "website_url": WEBSITE_URL,
+        # ===== [v3.19.14] ایفای نقش — بنر «بازگشت به حساب مدیر» =====
+        "instructor_impersonating": bool(session.get("impersonator")),
+        "impersonator_name": ((session.get("impersonator") or {}).get("full_name")
+                              or (session.get("impersonator") or {}).get("username") or ""),
+        "impersonated_name": ((session.get("admin") or {}).get("full_name")
+                              or (session.get("admin") or {}).get("username") or ""),
     }
 
 
@@ -2856,6 +2862,59 @@ def admin_user_block(user_id):
               "user", user_id, f"تغییر وضعیت مسدودیت کاربر #{user_id}")
     flash(f"کاربر {'مسدود' if blocked else 'رفع مسدودیت'} شد.", "success")
     return redirect(url_for("admin_users"))
+
+
+# ==================================================
+# [v3.19.14] ایفای نقش (Impersonation) — ورود سوپرادمین با هویت استاد برای پشتیبانی
+# ==================================================
+@app.route("/admin/users/<int:user_id>/impersonate", methods=["POST"])
+@super_admin_required
+def admin_user_impersonate(user_id):
+    """ایفای نقش: ورود سوپرادمین با هویت یک استاد برای مشاهده/اصلاح داده‌های او.
+    session ادمین اصلی در کلید impersonator ذخیره و با /admin/stop_impersonation
+    بازگردانده می‌شود. فقط سوپرادمین، فقط برای اساتید غیرمسدود. هیچ داده‌ای تغییر
+    نمی‌کند — تنها session تعویض می‌شود و رویداد در audit_log ثبت می‌گردد."""
+    rows = db.execute_query("SELECT * FROM authorized_users WHERE id = ?", (user_id,))
+    if not rows:
+        flash("کاربر یافت نشد.", "error")
+        return redirect(url_for("admin_users"))
+    user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+    if user.get("role") != "instructor" and user.get("user_type") != "instructor":
+        flash("ایفای نقش فقط برای کاربران با نقش استاد مجاز است.", "error")
+        return redirect(url_for("admin_users"))
+    if user.get("is_blocked"):
+        flash("این حساب مسدود است و امکان ایفای نقش وجود ندارد.", "error")
+        return redirect(url_for("admin_users"))
+    # ثبت رویداد با هویت سوپرادمین (قبل از تعویض session)
+    audit_log("impersonate_start", target_type="user", target_id=user_id,
+              description=f"ایفای نقش: ورود به‌عنوان استاد «{user.get('name')}» "
+                          f"(id={user_id}, phone={user.get('display_phone')})")
+    # ذخیره session ادمین اصلی و تعویض به هویت استاد
+    session["impersonator"] = dict(session["admin"])
+    session["admin"] = {
+        "id": user["id"],
+        "username": user.get("student_number") or user.get("display_phone") or user.get("name") or "",
+        "full_name": user.get("name") or "",
+        "role": "instructor",
+        "impersonating": True,
+    }
+    flash(f"🎭 ایفای نقش فعال شد. اکنون با هویت استاد «{user.get('name')}» وارد شده‌اید. "
+          f"برای بازگشت، روی «بازگشت به حساب مدیر» کلیک کنید.", "warning")
+    return redirect(url_for("admin_preferences"))
+
+
+@app.route("/admin/stop_impersonation")
+@admin_or_instructor_required
+def admin_stop_impersonation():
+    """پایان ایفای نقش — بازگشت به حساب سوپرادمین اصلی."""
+    imp = session.pop("impersonator", None)
+    if imp:
+        session["admin"] = dict(imp)
+        audit_log("impersonate_stop", description="پایان ایفای نقش — بازگشت به حساب سوپرادمین")
+        flash("به حساب مدیر بازگشتید.", "success")
+    else:
+        flash("ایفای نقش فعالی در جریان نیست.", "info")
+    return redirect(url_for("admin_index"))
 
 
 @app.route("/admin/users/<int:user_id>/history")

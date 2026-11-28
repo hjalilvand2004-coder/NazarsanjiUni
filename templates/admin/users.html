@@ -76,6 +76,11 @@
                         <button type="submit" class="btn btn-danger btn-sm" title="مسدود کردن" onclick="return confirm('کاربر مسدود شود؟')">×</button>
                         {% endif %}
                     </form>
+                    {% if (u.role == 'instructor' or u.user_type == 'instructor') and admin is defined and admin.role == 'super_admin' %}
+                    <form method="POST" action="{{ url_for('admin_user_impersonate', user_id=u.id) }}" style="display:inline;" onsubmit="return confirm('با هویت استاد «{{ u.name }}» وارد می‌شوید؟\n(برای امور پشتیبانی — همهٔ اقدامات در لاگ ثبت می‌شود.)')">
+                        <button type="submit" class="btn btn-ghost btn-sm" title="ایفای نقش (ورود به‌عنوان استاد)" style="color:var(--accent);">🎭</button>
+                    </form>
+                    {% endif %}
                 </td>
             </tr>
             {% else %}
