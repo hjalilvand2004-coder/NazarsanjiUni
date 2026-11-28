@@ -2868,12 +2868,15 @@ def admin_user_block(user_id):
 # [v3.19.14] ایفای نقش (Impersonation) — ورود سوپرادمین با هویت استاد برای پشتیبانی
 # ==================================================
 @app.route("/admin/users/<int:user_id>/impersonate", methods=["POST"])
-@super_admin_required
+@login_required
 def admin_user_impersonate(user_id):
-    """ایفای نقش: ورود سوپرادمین با هویت یک استاد برای مشاهده/اصلاح داده‌های او.
+    """ایفای نقش: ورود ادمین سیستم با هویت یک استاد برای مشاهده/اصلاح داده‌های او.
     session ادمین اصلی در کلید impersonator ذخیره و با /admin/stop_impersonation
-    بازگردانده می‌شود. فقط سوپرادمین، فقط برای اساتید غیرمسدود. هیچ داده‌ای تغییر
-    نمی‌کند — تنها session تعویض می‌شود و رویداد در audit_log ثبت می‌گردد."""
+    بازگردانده می‌شود. هر ادمین فعال (هر نقش ادمینی: super_admin/admin/group_admin)
+    مجاز است؛ هدف فقط استاد است (بدون ارتقای دسترسی) و فقط برای اساتید غیرمسدود.
+    هیچ داده‌ای تغییر نمی‌کند — تنها session تعویض می‌شود و رویداد در audit_log ثبت
+    می‌گردد. [v3.19.15] محدودیت super_admin برداشته شد تا ادمین سیستم (با هر نقش)
+    بتواند از این قابلیت استفاده کند."""
     rows = db.execute_query("SELECT * FROM authorized_users WHERE id = ?", (user_id,))
     if not rows:
         flash("کاربر یافت نشد.", "error")
@@ -2885,7 +2888,7 @@ def admin_user_impersonate(user_id):
     if user.get("is_blocked"):
         flash("این حساب مسدود است و امکان ایفای نقش وجود ندارد.", "error")
         return redirect(url_for("admin_users"))
-    # ثبت رویداد با هویت سوپرادمین (قبل از تعویض session)
+    # ثبت رویداد با هویت ادمین (قبل از تعویض session)
     audit_log("impersonate_start", target_type="user", target_id=user_id,
               description=f"ایفای نقش: ورود به‌عنوان استاد «{user.get('name')}» "
                           f"(id={user_id}, phone={user.get('display_phone')})")
@@ -2906,11 +2909,11 @@ def admin_user_impersonate(user_id):
 @app.route("/admin/stop_impersonation")
 @admin_or_instructor_required
 def admin_stop_impersonation():
-    """پایان ایفای نقش — بازگشت به حساب سوپرادمین اصلی."""
+    """پایان ایفای نقش — بازگشت به حساب ادمین اصلی."""
     imp = session.pop("impersonator", None)
     if imp:
         session["admin"] = dict(imp)
-        audit_log("impersonate_stop", description="پایان ایفای نقش — بازگشت به حساب سوپرادمین")
+        audit_log("impersonate_stop", description="پایان ایفای نقش — بازگشت به حساب ادمین اصلی")
         flash("به حساب مدیر بازگشتید.", "success")
     else:
         flash("ایفای نقش فعالی در جریان نیست.", "info")
