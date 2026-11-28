@@ -241,6 +241,36 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """)
+            # [v3.19.13] ثبت تلاش‌های ورود (ناموفق + درخواست بازنشانی) برای گزارش ادمین
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username_entered TEXT,
+                matched_user_id INTEGER REFERENCES authorized_users(id),
+                match_status TEXT,
+                reason TEXT,
+                channel TEXT,
+                ip_address TEXT,
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            # [v3.19.13] توکن‌های بازنشانی رمز عبور (یکبارمصرف، با انقضا)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES authorized_users(id),
+                token TEXT NOT NULL UNIQUE,
+                email_target TEXT,
+                deliver_channel TEXT,
+                expires_at TIMESTAMP NOT NULL,
+                used INTEGER DEFAULT 0,
+                used_at TIMESTAMP,
+                ip_address TEXT,
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
 
             # مایگریشن: افزودن ستون‌های جدید به courses موجود
             try: cursor.execute("ALTER TABLE courses ADD COLUMN unique_code INTEGER")
@@ -254,6 +284,8 @@ class Database:
             try: cursor.execute("ALTER TABLE authorized_users ADD COLUMN first_channel TEXT")
             except Exception: pass
             try: cursor.execute("ALTER TABLE authorized_users ADD COLUMN password_hash TEXT")
+            except Exception: pass
+            try: cursor.execute("ALTER TABLE authorized_users ADD COLUMN email TEXT")
             except Exception: pass
             try: cursor.execute("ALTER TABLE course_requests ADD COLUMN survey_id INTEGER")
             except Exception: pass
@@ -277,6 +309,11 @@ class Database:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_surveys_active ON surveys(is_active)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_history_user ON login_history(user_id, created_at)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_history_channel ON login_history(channel, created_at)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_created ON login_attempts(created_at)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_reason ON login_attempts(reason, created_at)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_user ON login_attempts(matched_user_id, created_at)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_password_resets_used ON password_resets(used, expires_at)")
             except Exception:
                 pass
 
@@ -631,6 +668,135 @@ class Database:
             (user_id, limit)
         )
         return [dict(r) for r in rows] if rows else []
+
+    # ==================================================
+    # [v3.19.13] تلاش‌های ورود + بازنشانی رمز عبور
+    # ==================================================
+    def record_login_attempt(self, username_entered, matched_user_id=None,
+                             match_status=None, reason=None, channel="website",
+                             ip_address=None, user_agent=None):
+        """ثبت یک تلاش ورود (ناموفق/درخواست بازنشانی) برای گزارش ادمین. هرگز خطا نمی‌دهد."""
+        try:
+            self.execute_query(
+                """INSERT INTO login_attempts
+                   (username_entered, matched_user_id, match_status, reason,
+                    channel, ip_address, user_agent)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (username_entered, matched_user_id, match_status, reason,
+                 channel, ip_address, (user_agent or "")[:200])
+            )
+        except Exception:
+            pass
+
+    def get_login_attempts(self, reason=None, days=None, limit=500):
+        params, where = [], []
+        if reason:
+            where.append("la.reason = ?"); params.append(reason)
+        if days:
+            where.append("la.created_at >= datetime('now', ?)"); params.append(f"-{int(days)} days")
+        sql = ("SELECT la.*, u.name AS matched_name, u.display_phone AS matched_phone "
+               "FROM login_attempts la LEFT JOIN authorized_users u ON la.matched_user_id = u.id ")
+        if where:
+            sql += "WHERE " + " AND ".join(where) + " "
+        sql += "ORDER BY la.created_at DESC LIMIT ?"
+        params.append(limit)
+        rows = self.execute_query(sql, params)
+        return [dict(r) for r in rows] if rows else []
+
+    def get_login_attempt_stats(self, days=30):
+        try:
+            rows = self.execute_query(
+                """SELECT reason, COUNT(*) AS cnt,
+                          COUNT(DISTINCT matched_user_id) AS uniq_users
+                   FROM login_attempts
+                   WHERE created_at >= datetime('now', ?)
+                   GROUP BY reason ORDER BY cnt DESC""",
+                (f"-{int(days)} days",)
+            )
+            return [dict(r) for r in rows] if rows else []
+        except Exception:
+            return []
+
+    # ----- بازنشانی رمز عبور -----
+    def create_password_reset(self, user_id, token, expires_at,
+                              email_target=None, deliver_channel="email",
+                              ip_address=None, user_agent=None):
+        self.execute_query(
+            """INSERT INTO password_resets
+               (user_id, token, email_target, deliver_channel, expires_at,
+                ip_address, user_agent)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, token, email_target, deliver_channel, expires_at,
+             ip_address, (user_agent or "")[:200])
+        )
+
+    def get_password_reset_by_token(self, token):
+        rows = self.execute_query(
+            """SELECT pr.*, u.name AS user_name, u.display_phone AS user_phone,
+                      u.student_number, u.role, u.user_type
+               FROM password_resets pr
+               JOIN authorized_users u ON pr.user_id = u.id
+               WHERE pr.token = ? LIMIT 1""",
+            (token,)
+        )
+        return dict(rows[0]) if rows else None
+
+    def mark_password_reset_used(self, token):
+        self.execute_query(
+            """UPDATE password_resets SET used = 1, used_at = CURRENT_TIMESTAMP
+               WHERE token = ? AND used = 0""",
+            (token,)
+        )
+
+    def set_user_password(self, user_id, new_password):
+        """تنظیم رمز عبور جدید (هش‌شده با pbkdf2) — فقط پس از اعتبارسنجی توکن."""
+        self.execute_query(
+            "UPDATE authorized_users SET password_hash = ? WHERE id = ?",
+            (hash_password(new_password), user_id)
+        )
+
+    def get_password_resets_for_admin(self, only_pending=True, limit=200):
+        sql = ("SELECT pr.*, u.name AS user_name, u.display_phone AS user_phone "
+               "FROM password_resets pr JOIN authorized_users u ON pr.user_id = u.id ")
+        if only_pending:
+            sql += "WHERE pr.used = 0 "
+        sql += "ORDER BY pr.created_at DESC LIMIT ?"
+        rows = self.execute_query(sql, (limit,))
+        return [dict(r) for r in rows] if rows else []
+
+    def get_instructor_email_by_user_id(self, user_id):
+        """ایمیل استاد: اول authorized_users.email، سپس instructors.email (با تطبیق شماره)."""
+        try:
+            rows = self.execute_query(
+                "SELECT email, display_phone, normalized_phone, student_number "
+                "FROM authorized_users WHERE id = ?", (user_id,))
+            if not rows:
+                return None
+            u = dict(rows[0])
+            if u.get("email") and "@" in str(u["email"]):
+                return u["email"]
+            phone = u.get("normalized_phone") or u.get("display_phone") or ""
+            forms = []
+            if phone:
+                forms.append(phone)
+                forms.append(phone[1:] if phone.startswith("0") else "0" + phone)
+            sn = u.get("student_number") or ""
+            if sn:
+                forms.append(sn)
+            forms = [f for f in forms if f]
+            if forms:
+                ph = ",".join("?" * len(forms))
+                r = self.execute_query(
+                    f"SELECT email FROM instructors WHERE phone IN ({ph}) "
+                    f"OR username IN ({ph}) LIMIT 1",
+                    (*forms, *forms))
+                if r:
+                    em = dict(r[0]).get("email")
+                    if em and "@" in str(em):
+                        return em
+        except Exception:
+            pass
+        return None
 
     def get_channel_stats(self):
         rows = self.execute_query("""

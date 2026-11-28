@@ -1,0 +1,120 @@
+{% extends "admin/base.html" %}
+{% block title %}تلاش‌های ورود ناموفق{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h1>تلاش‌های ورود ناموفق و درخواست‌های بازنشانی رمز</h1>
+        <div class="breadcrumb">خانه / مدیریت / تلاش‌های ورود</div>
+    </div>
+    <a href="{{ url_for('admin_login_attempts_excel') }}" class="btn btn-primary">دانلود Excel</a>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header"><div class="card-title">فیلتر</div></div>
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;padding:12px;">
+        <div class="form-group" style="margin:0;">
+            <label class="form-label">دلیل</label>
+            <select name="reason" class="form-input">
+                <option value="">همه</option>
+                {% for key, label in reason_labels.items() %}
+                <option value="{{ key }}" {% if reason == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label class="form-label">بازه (روز)</label>
+            <select name="days" class="form-input">
+                {% for d in [1, 7, 30, 90] %}
+                <option value="{{ d }}" {% if days == d|string %}selected{% endif %}>{{ d }} روز</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">اعمال فیلتر</button>
+        <a href="{{ url_for('admin_login_attempts') }}" class="btn">پاک کردن فیلتر</a>
+    </form>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header"><div class="card-title">آمار بر اساس دلیل ({{ days }} روز)</div></div>
+        <table class="table">
+            <thead><tr><th>دلیل</th><th>تعداد</th><th>کاربران یکتا</th></tr></thead>
+            <tbody>
+                {% for s in stats %}
+                <tr>
+                    <td>{{ reason_labels.get(s.reason, s.reason) }}</td>
+                    <td><strong>{{ s.cnt }}</strong></td>
+                    <td>{{ s.uniq_users }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" style="text-align:center;color:var(--text-3);">داده‌ای موجود نیست</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <div class="card-header"><div class="card-title">درخواست‌های بازنشانی رمز در انتظار تحویل</div></div>
+        <div style="overflow-x:auto;">
+        <table class="table">
+            <thead><tr><th>استاد</th><th>شماره</th><th>ایمیل</th><th>کانال تحویل</th><th>زمان</th></tr></thead>
+            <tbody>
+                {% for r in resets %}
+                <tr>
+                    <td>{{ r.user_name }}</td>
+                    <td>{{ r.user_phone }}</td>
+                    <td>{{ r.email_target or '—' }}</td>
+                    <td>
+                        {% if r.deliver_channel == 'email' %}
+                        <span style="padding:2px 8px;border-radius:4px;font-size:11px;background:#dcfce7;color:#166534;">ایمیل ارسال شد</span>
+                        {% else %}
+                        <span style="padding:2px 8px;border-radius:4px;font-size:11px;background:#fef3c7;color:#92400e;">دستی — ادمین تحویل دهد</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ r.created_at }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" style="text-align:center;color:var(--text-3);">درخواستی در انتظار نیست</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">تلاش‌های ورود ({{ attempts|length }} رکورد)</div>
+        <span style="font-size:12px;color:var(--text-3);">آخرین تلاش‌ها در {{ days }} روز گذشته</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="table">
+        <thead>
+            <tr><th>#</th><th>زمان</th><th>شناسه واردشده</th><th>کاربر تطبیق‌خورده</th><th>شماره</th><th>دلیل</th><th>وضعیت</th><th>IP</th></tr>
+        </thead>
+        <tbody>
+            {% for a in attempts %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ a.created_at }}</td>
+                <td>{{ a.username_entered }}</td>
+                <td>{{ a.matched_name or '—' }}</td>
+                <td>{{ a.matched_phone or '—' }}</td>
+                <td>
+                    <span style="padding:2px 8px;border-radius:4px;font-size:11px;
+                    {% if a.reason == 'wrong_password' %}background:#fef3c7;color:#92400e;
+                    {% elif a.reason == 'password_reset_done' %}background:#dcfce7;color:#166534;
+                    {% elif a.match_status == 'not_found' %}background:#fee2e2;color:#991b1b;
+                    {% else %}background:#dbeafe;color:#1e40af;{% endif %}">{{ reason_labels.get(a.reason, a.reason) }}</span>
+                </td>
+                <td>{{ a.match_status or '—' }}</td>
+                <td>{{ a.ip_address or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" style="text-align:center;color:var(--text-3);">تلاشی ثبت نشده است</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

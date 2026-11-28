@@ -41,6 +41,19 @@ ADMIN_SESSION_TTL = 8 * 3600
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin@1405"
 PASSWORD_HASH_ITERATIONS = 100000
+
+# ===== [v3.19.13] ارسال ایمیل (بازنشانی رمز عبور اساتید) =====
+# اگر SMTP فعال نباشد، درخواست‌های بازنشانی در جدول password_resets ثبت و
+# در گزارش ادمین نمایش داده می‌شوند تا مدیر لینک را دستی تحویل دهد.
+SMTP_ENABLED = False
+SMTP_HOST = ""          # مثال: smtp.gmail.com
+SMTP_PORT = 587
+SMTP_USE_TLS = True
+SMTP_USER = ""
+SMTP_PASS = ""
+SMTP_FROM = ""          # مثال: noreply@darsyar360.ir
+SMTP_FROM_NAME = "سامانه نظرسنجی درس‌یار ۳۶۰"
+PASSWORD_RESET_EXPIRE_HOURS = 2
 STUDENT_SESSION_TTL = 24 * 3600
 
 # کانال‌های ورود
@@ -122,7 +135,7 @@ MESSAGES = {
 }
 
 # متادیتای نسخه
-APP_VERSION = "3.19.12"
+APP_VERSION = "3.19.13"
 APP_RELEASE_DATE = "1405-08-29"
 APP_TITLE = "سامانه نظرسنجی دروس"
 MOBILE_APP_NAME = "دانشجو360"

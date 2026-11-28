@@ -58,6 +58,50 @@ def normalize_phone(phone) -> str:
     return phone
 
 
+def phone_forms(username_norm):
+    """[v3.19.12+] فرم‌های ۱۱رقمی (با صفر) و ۱۰رقمی (بدون صفر) یک شماره موبایل.
+    برمی‌گرداند (phone_11, phone_10) یا (None, None) اگر ورودی شماره موبایل معتبر نباشد."""
+    s = normalize_digits(username_norm)
+    if len(s) == 11 and s.isdigit() and s[:1] == "0":
+        return s, s[1:]
+    if len(s) == 10 and s.isdigit() and s[:1] != "0":
+        return "0" + s, s
+    return None, None
+
+
+def generate_reset_token():
+    """[v3.19.13] توکن یکبارمصرفِ بازنشانی رمز عبور."""
+    import secrets as _s
+    return _s.token_urlsafe(32)
+
+
+def send_email(to, subject, body):
+    """[v3.19.13] ارسال ایمیل ساده via SMTP. برمی‌گرداند (ok, msg).
+    اگر SMTP فعال نباشد (False, 'disabled') برمی‌گرداند تا فرآیند بازنشانی،
+    لینک را برای تحویل دستی ادمین ثبت کند."""
+    from src.config import (SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_USE_TLS,
+                            SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_FROM_NAME)
+    if not SMTP_ENABLED or not SMTP_HOST or not SMTP_USER or not SMTP_FROM:
+        return False, "disabled"
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM}>"
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT), timeout=20) as srv:
+            if SMTP_USE_TLS:
+                srv.starttls()
+            srv.login(SMTP_USER, SMTP_PASS)
+            srv.sendmail(SMTP_FROM, [to], msg.as_string())
+        return True, "sent"
+    except Exception as e:
+        return False, f"error: {e}"
+
+
 def is_admin_student_number(student_number: str) -> bool:
     return normalize_digits(student_number) == "000000000"
 

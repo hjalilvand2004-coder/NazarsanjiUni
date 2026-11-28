@@ -49,7 +49,7 @@ from src.config import (
     DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD,
     CHANNEL_BOT, CHANNEL_MINIAPP, CHANNEL_WEBSITE, CHANNEL_LABELS,
     MOBILE_APP_URL, MOBILE_APP_NAME, MOBILE_APP_VERSION, WEBSITE_PORT,
-    COMPANY_NAME, COMPANY_URL,
+    COMPANY_NAME, COMPANY_URL, PASSWORD_RESET_EXPIRE_HOURS,
 )
 from src.database import Database, hash_password, verify_password
 from src import helpers
@@ -383,15 +383,23 @@ def instructor_login():
 
         # نرمال‌سازی ارقام فارسی/عربی -> لاتین (مستقل از وضعیت کیبورد کاربر)
         username_norm = helpers.normalize_digits(username)
+        ip = request.remote_addr
+        ua = request.headers.get("User-Agent", "")
 
-        # [v3.19.12] ورود فقط با شماره تلفن همراه (۱۱ رقم با صفر یا ۱۰ رقم بدون صفر).
+        def _fail(reason, matched_uid=None, status=None):
+            """[v3.19.13] ثبت تلاش ناموفق ورود برای گزارش ادمین."""
+            try:
+                db.record_login_attempt(username, matched_user_id=matched_uid,
+                                        match_status=status, reason=reason,
+                                        channel=CHANNEL_WEBSITE, ip_address=ip, user_agent=ua)
+            except Exception:
+                pass
+
+        # [v3.19.12/13] ورود فقط با شماره تلفن همراه (۱۱ رقم با صفر یا ۱۰ رقم بدون صفر).
         # صفر اول نباید مانع ورود شود: هر دو فرم بررسی می‌شود به‌ترتیبِ فرم واردشده.
-        phone_11 = phone_10 = None
-        if len(username_norm) == 11 and username_norm.isdigit() and username_norm[:1] == "0":
-            phone_11, phone_10 = username_norm, username_norm[1:]
-        elif len(username_norm) == 10 and username_norm.isdigit() and username_norm[:1] != "0":
-            phone_10, phone_11 = username_norm, "0" + username_norm
-        else:
+        phone_11, phone_10 = helpers.phone_forms(username_norm)
+        if not phone_11:
+            _fail("phone_invalid", status="invalid")
             flash("نام کاربری باید شماره تلفن همراه باشد (۱۱ رقم با صفر یا ۱۰ رقم بدون صفر).", "error")
             return render_template("instructor/login.html")
 
@@ -416,11 +424,13 @@ def instructor_login():
                 pass
 
         if not user:
+            _fail("not_found", status="not_found")
             flash("نام کاربری یا رمز عبور نادرست است.", "error")
             return render_template("instructor/login.html")
 
         # بررسی مسدود بودن
         if user.get("is_blocked"):
+            _fail("blocked", matched_uid=user["id"], status="found")
             flash("حساب شما مسدود شده است.", "error")
             return render_template("instructor/login.html")
 
@@ -428,12 +438,14 @@ def instructor_login():
         user_role = user.get("role") or ""
         user_type = user.get("user_type") or ""
         if user_role != "instructor" and user_type != "instructor":
+            _fail("not_instructor", matched_uid=user["id"], status="found")
             flash("این حساب برای ورود استاد نیست.", "error")
             return render_template("instructor/login.html")
 
         # بررسی رمز عبور — تطبیق هم با ورودی خام و هم نرمال‌شده (پشتیبانی از کیبورد فارسی/انگلیسی)
         if not (db.verify_user_password(user, password) or
                 db.verify_user_password(user, helpers.normalize_digits(password))):
+            _fail("wrong_password", matched_uid=user["id"], status="found")
             flash("نام کاربری یا رمز عبور نادرست است.", "error")
             return render_template("instructor/login.html")
 
@@ -452,6 +464,169 @@ def instructor_login():
         return redirect(url_for("admin_preferences"))
 
     return render_template("instructor/login.html")
+
+
+# ==================================================
+# [v3.19.13] فراموشی رمز عبور استاد
+# ==================================================
+@app.route("/instructor/forgot_password", methods=["GET", "POST"])
+def instructor_forgot_password():
+    """فراموشی رمز عبور — کاربر شماره تلفن (یا ایمیل) وارد می‌کند؛ سیستم استاد را
+    با تطبیق دوفرمی شماره (با/بدون صفر) پیدا می‌کند و لینک بازنشانی به ایمیل
+    ثبت‌شده‌اش ارسال می‌شود. اگر SMTP فعال نباشد یا ایمیلی ثبت نشده باشد، درخواست
+    در password_resets ثبت و در گزارش ادمین نمایش داده می‌شود تا مدیر تحویل دهد."""
+    if request.method == "POST":
+        identifier = (request.form.get("identifier") or "").strip()
+        if not identifier:
+            flash("شماره تلفن همراه یا ایمیل خود را وارد کنید.", "error")
+            return render_template("instructor/forgot_password.html")
+        ident_norm = helpers.normalize_digits(identifier)
+        ip = request.remote_addr
+        ua = request.headers.get("User-Agent", "")
+        is_email = "@" in ident_norm
+
+        user = None
+        if is_email:
+            try:
+                rows = db.execute_query(
+                    "SELECT * FROM authorized_users WHERE email = ? LIMIT 1", (ident_norm,))
+                if rows:
+                    user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]
+                if not user:
+                    # fallback: یافتن استاد از طریق instructors.email → تطبیق شماره
+                    r = db.execute_query(
+                        "SELECT phone, username FROM instructors WHERE email = ? LIMIT 1", (ident_norm,))
+                    if r:
+                        row = dict(r[0])
+                        ph = row.get("phone") or row.get("username") or ""
+                        p11, p10 = helpers.phone_forms(ph)
+                        for frm in (p11, p10):
+                            if not frm:
+                                continue
+                            u = db.get_user_by_student_number(frm)
+                            if u:
+                                user = u; break
+                            rr = db.execute_query(
+                                "SELECT * FROM authorized_users WHERE display_phone=? OR normalized_phone=? LIMIT 1",
+                                (frm, frm))
+                            if rr:
+                                user = dict(rr[0]) if not isinstance(rr[0], dict) else rr[0]; break
+            except Exception:
+                pass
+        else:
+            p11, p10 = helpers.phone_forms(ident_norm)
+            if not p11:
+                try: db.record_login_attempt(ident_norm, reason="forgot_invalid",
+                        match_status="invalid", channel=CHANNEL_WEBSITE, ip_address=ip, user_agent=ua)
+                except Exception: pass
+                flash("ورودی نامعتبر است. شماره تلفن همراه یا ایمیل وارد کنید.", "error")
+                return render_template("instructor/forgot_password.html")
+            forms = [p11, p10] if ident_norm == p11 else [p10, p11]
+            for frm in forms:
+                u = db.get_user_by_student_number(frm)
+                if u:
+                    user = u; break
+                try:
+                    rows = db.execute_query(
+                        "SELECT * FROM authorized_users "
+                        "WHERE student_number=? OR display_phone=? OR normalized_phone=? LIMIT 1",
+                        (frm, frm, frm))
+                    if rows:
+                        user = dict(rows[0]) if not isinstance(rows[0], dict) else rows[0]; break
+                except Exception:
+                    pass
+
+        # اعتبارسنجی نقش (باید استاد باشد) — در غیر این صورت به‌عنوان پیدا‌نشده رفتار کن
+        if user:
+            ur = user.get("role") or ""
+            ut = user.get("user_type") or ""
+            if ur != "instructor" and ut != "instructor":
+                user = None
+
+        if not user:
+            try: db.record_login_attempt(ident_norm, reason="forgot_not_found",
+                    match_status="not_found", channel=CHANNEL_WEBSITE, ip_address=ip, user_agent=ua)
+            except Exception: pass
+            # پیام عمومی + همان رفتارِ حالتِ «پیدا شد» (redirect به ورود) → عدم افشای وجود حساب.
+            flash("درخواست بازنشانی ثبت شد. اگر اطلاعات در سامانه ثبت باشد، لینک بازنشانی ارسال می‌شود؛ در غیر این صورت مدیر سامانه آن را بررسی و ارسال خواهد کرد.", "success")
+            return redirect(url_for("instructor_login"))
+
+        # استاد پیدا شد → تولید توکن + ارسال لینک
+        token = helpers.generate_reset_token()
+        import datetime as _dt
+        expires = (_dt.datetime.utcnow() + _dt.timedelta(hours=PASSWORD_RESET_EXPIRE_HOURS)) \
+            .strftime("%Y-%m-%d %H:%M:%S")
+        email_target = db.get_instructor_email_by_user_id(user["id"])
+        link = url_for("instructor_reset_password", token=token, _external=True)
+        deliver_channel = "email"
+        sent_ok = False
+        if email_target:
+            sent_ok, _msg = helpers.send_email(
+                email_target,
+                "بازنشانی رمز عبور — سامانه درس‌یار ۳۶۰",
+                f"استاد گرامی {user.get('name','')}\n\n"
+                f"برای بازنشانی رمز عبور خود روی لینک زیر کلیک کنید:\n{link}\n\n"
+                f"این لینک تا {PASSWORD_RESET_EXPIRE_HOURS} ساعت معتبر است.\n"
+                f"اگر شما درخواست نکرده‌اید، این پیام را نادیده بگیرید.")
+            if not sent_ok:
+                deliver_channel = "manual"   # SMTP فعال نیست → ادمین تحویل دهد
+        else:
+            deliver_channel = "manual"       # ایمیل ثبت نشده → ادمین تحویل دهد
+
+        db.create_password_reset(user["id"], token, expires,
+                                 email_target=email_target, deliver_channel=deliver_channel,
+                                 ip_address=ip, user_agent=ua)
+        try: db.record_login_attempt(ident_norm, matched_user_id=user["id"],
+                match_status="found", reason="forgot_requested",
+                channel=CHANNEL_WEBSITE, ip_address=ip, user_agent=ua)
+        except Exception: pass
+
+        if deliver_channel == "email" and sent_ok:
+            flash("لینک بازنشانی رمز عبور به ایمیل شما ارسال شد.", "success")
+        else:
+            flash("درخواست بازنشانی ثبت شد. مدیر سامانه لینک بازنشانی را برای شما ارسال خواهد کرد.", "success")
+        return redirect(url_for("instructor_login"))
+
+    return render_template("instructor/forgot_password.html")
+
+
+@app.route("/instructor/reset_password/<token>", methods=["GET", "POST"])
+def instructor_reset_password(token):
+    """بازنشانی رمز عبور با توکن یکبارمصرفِ دارای انقضا."""
+    reset = db.get_password_reset_by_token(token)
+    if not reset or reset.get("used"):
+        flash("لینک بازنشانی نامعتبر یا استفاده‌شده است.", "error")
+        return redirect(url_for("instructor_login"))
+    try:
+        import datetime as _dt
+        exp = _dt.datetime.strptime(str(reset["expires_at"]).split(".")[0], "%Y-%m-%d %H:%M:%S")
+        if _dt.datetime.utcnow() > exp:
+            flash("لینک بازنشانی منقضی شده است. لطفاً درخواست جدید ثبت کنید.", "error")
+            return redirect(url_for("instructor_login"))
+    except Exception:
+        flash("لینک بازنشانی نامعتبر است.", "error")
+        return redirect(url_for("instructor_login"))
+
+    if request.method == "POST":
+        new_password = request.form.get("new_password") or ""
+        confirm = request.form.get("confirm_password") or ""
+        if len(new_password) < 6:
+            flash("رمز عبور باید حداقل ۶ کاراکتر باشد.", "error")
+            return render_template("instructor/reset_password.html", token=token)
+        if new_password != confirm:
+            flash("رمز عبور و تأییدیه آن یکسان نیستند.", "error")
+            return render_template("instructor/reset_password.html", token=token)
+        db.set_user_password(reset["user_id"], new_password)
+        db.mark_password_reset_used(token)
+        try: db.record_login_attempt(reset.get("user_phone") or reset.get("student_number") or "",
+                matched_user_id=reset["user_id"], match_status="found",
+                reason="password_reset_done", channel=CHANNEL_WEBSITE,
+                ip_address=request.remote_addr, user_agent=request.headers.get("User-Agent",""))
+        except Exception: pass
+        flash("رمز عبور با موفقیت تغییر کرد. اکنون وارد شوید.", "success")
+        return redirect(url_for("instructor_login"))
+
+    return render_template("instructor/reset_password.html", token=token)
 
 
 def _generate_unique_instructor_code(db):
@@ -3284,6 +3459,83 @@ def admin_report_excel():
     resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
     resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return resp
+
+
+# ==================================================
+# [v3.19.13] گزارش تلاش‌های ورود ناموفق + درخواست‌های بازنشانی رمز
+# ==================================================
+@app.route("/admin/login_attempts")
+@login_required
+def admin_login_attempts():
+    """گزارش ادمین از تلاش‌های ورود ناموفق (به‌ویژه رمز اشتباه/فراموشی) و
+    درخواست‌های بازنشانی رمز در انتظار تحویل."""
+    is_admin = g.admin.get("role") != "instructor"
+    if not is_admin:
+        flash("این گزارش فقط برای مدیر سامانه قابل مشاهده است.", "error")
+        return redirect(url_for("admin_index"))
+    reason = request.args.get("reason") or ""
+    days = request.args.get("days") or "30"
+    try:
+        days_i = int(days)
+    except Exception:
+        days_i = 30
+    attempts = db.get_login_attempts(reason=reason or None, days=days_i, limit=1000)
+    stats = db.get_login_attempt_stats(days=days_i)
+    resets = db.get_password_resets_for_admin(only_pending=True, limit=200)
+    reason_labels = {
+        "wrong_password": "رمز اشتباه (احتمالاً فراموشی)",
+        "not_found": "کاربر یافت نشد",
+        "blocked": "حساب مسدود",
+        "not_instructor": "نقش غیراستاد",
+        "phone_invalid": "شماره نامعتبر",
+        "forgot_requested": "درخواست بازنشانی رمز",
+        "forgot_not_found": "بازنشانی — کاربر یافت نشد",
+        "forgot_invalid": "بازنشانی — ورودی نامعتبر",
+        "password_reset_done": "بازنشانی رمز (موفق)",
+    }
+    return render_template("admin/login_attempts.html",
+        attempts=attempts, stats=stats, resets=resets,
+        is_admin=is_admin, admin=g.admin,
+        reason=reason, days=days, reason_labels=reason_labels)
+
+
+@app.route("/admin/login_attempts/excel")
+@login_required
+def admin_login_attempts_excel():
+    if g.admin.get("role") == "instructor":
+        flash("دسترسی محدود به مدیر.", "error")
+        return redirect(url_for("admin_index"))
+    rows = db.get_login_attempts(reason=None, days=90, limit=5000)
+    import pandas as pd
+    from openpyxl import load_workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    data = [{
+        "زمان": str(r.get("created_at")),
+        "شناسه واردشده": r.get("username_entered") or "",
+        "کاربر تطبیق‌خورده": r.get("matched_name") or "",
+        "شماره": r.get("matched_phone") or "",
+        "وضعیت تطبیق": r.get("match_status") or "",
+        "دلیل": r.get("reason") or "",
+        "IP": r.get("ip_address") or "",
+        "کانال": r.get("channel") or "",
+    } for r in rows]
+    df = pd.DataFrame(data)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as w:
+        df.to_excel(w, sheet_name="تلاش‌های_ورود", index=False)
+    output.seek(0)
+    wb = load_workbook(output)
+    fill = PatternFill(fill_type="solid", fgColor="1F4E78")
+    font = Font(color="FFFFFF", bold=True)
+    for ws in wb.worksheets:
+        ws.freeze_panes = "A2"
+        for c in ws[1]:
+            c.fill = fill; c.font = font; c.alignment = Alignment(horizontal="center")
+    wb.save(output); output.seek(0)
+    from flask import send_file
+    audit_log("login_attempts_excel", "report", None, "دانلود گزارش تلاش‌های ورود")
+    return send_file(output, as_attachment=True, download_name="login_attempts.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 @app.route("/admin/audit-log")
